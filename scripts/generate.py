@@ -28,6 +28,7 @@ NEWS_SWEEP_CLI = os.path.join(ROOT, "scripts/news_sweep_cli.py")
 
 SITE_TITLE = os.getenv("FIN_NEWS_SWEEP_TITLE", "Finance News Sweep")
 TOP_N = int(os.getenv("FIN_NEWS_SWEEP_TOP_N", "20"))
+NEW_HOURS = float(os.getenv("FIN_NEWS_SWEEP_NEW_HOURS", "6"))
 
 # Mark paywalled domains (keep links, but label).
 PAYWALLED = {
@@ -61,6 +62,38 @@ def run_summary() -> str:
     except Exception:
         pass
     return ""
+
+
+def parse_published(published: str) -> dt.datetime | None:
+    """Parse RSS published string (RFC822-ish) into UTC datetime."""
+    s = (published or "").strip()
+    if not s:
+        return None
+    # Common format: "Fri, 13 Mar 2026 18:44:00 GMT"
+    for fmt in (
+        "%a, %d %b %Y %H:%M:%S %Z",
+        "%a, %d %b %Y %H:%M:%S %z",
+        "%d %b %Y %H:%M:%S %Z",
+        "%Y-%m-%dT%H:%M:%S%z",
+        "%Y-%m-%dT%H:%M:%S.%f%z",
+    ):
+        try:
+            d = dt.datetime.strptime(s, fmt)
+            # If timezone-naive, assume UTC.
+            if d.tzinfo is None:
+                d = d.replace(tzinfo=dt.timezone.utc)
+            return d.astimezone(dt.timezone.utc)
+        except Exception:
+            continue
+    return None
+
+
+def is_new(published: str, now_utc: dt.datetime) -> bool:
+    d = parse_published(published)
+    if not d:
+        return False
+    age = now_utc - d
+    return 0 <= age.total_seconds() <= (NEW_HOURS * 3600)
 
 
 def domain(url: str) -> str:
@@ -129,7 +162,7 @@ def map_title_to_link(items: list[dict]) -> dict[str, dict]:
     return m
 
 
-def html_page(*, generated_at: str, summary_text: str, items: list[dict]) -> str:
+def html_page(*, generated_at: str, summary_text: str, items: list[dict], now_utc: dt.datetime) -> str:
     def esc(s: str) -> str:
         return html.escape(s or "")
 
@@ -144,9 +177,10 @@ def html_page(*, generated_at: str, summary_text: str, items: list[dict]) -> str
         src = str(it.get("source") or "").strip()
         dom = domain(link)
         pw = " <span class=\"pill\">paywalled</span>" if is_paywalled(dom) else ""
+        newpill = " <span class=\"pill new\">NEW</span>" if is_new(str(it.get("published") or ""), now_utc) else ""
         src_txt = f"<span class=\"src\">{esc(src)}</span>" if src else ""
         return (
-            f"<a href=\"{esc(link)}\" target=\"_blank\" rel=\"noopener noreferrer\">{esc(title)}</a> {src_txt}{pw}"
+            f"<a href=\"{esc(link)}\" target=\"_blank\" rel=\"noopener noreferrer\">{esc(title)}</a> {src_txt}{pw}{newpill}"
         )
 
     # Build top links list
@@ -159,9 +193,10 @@ def html_page(*, generated_at: str, summary_text: str, items: list[dict]) -> str
             continue
         dom = domain(link)
         pw = " <span class=\"pill\">paywalled</span>" if is_paywalled(dom) else ""
+        newpill = " <span class=\"pill new\">NEW</span>" if is_new(str(it.get("published") or ""), now_utc) else ""
         src_txt = f"<span class=\"src\">{esc(src)}</span>" if src else ""
         lis.append(
-            f"<li><a href=\"{esc(link)}\" target=\"_blank\" rel=\"noopener noreferrer\">{esc(title)}</a> {src_txt}{pw}</li>"
+            f"<li><a href=\"{esc(link)}\" target=\"_blank\" rel=\"noopener noreferrer\">{esc(title)}</a> {src_txt}{pw}{newpill}</li>"
         )
 
     # Storylines HTML (each category + example links)
@@ -199,6 +234,7 @@ def html_page(*, generated_at: str, summary_text: str, items: list[dict]) -> str
     a:hover {{ text-decoration: underline; }}
     .src {{ margin-left: 6px; opacity: 0.8; font-size: 12px; }}
     .pill {{ display: inline-block; margin-left: 8px; font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(127,127,127,0.35); opacity: 0.85; }}
+    .pill.new {{ border-color: rgba(60,180,90,0.6); }}
     .story {{ margin: 10px 0 14px 0; padding-top: 8px; border-top: 1px dashed rgba(127,127,127,0.25); }}
     .storyhdr {{ font-weight: 650; margin-bottom: 6px; }}
     .count {{ opacity: 0.75; font-weight: 500; }}
@@ -250,7 +286,7 @@ def main() -> int:
     now_utc = dt.datetime.now(dt.timezone.utc)
     generated_at = fmt_updated(now_utc)
 
-    out_html = html_page(generated_at=generated_at, summary_text=summary_text, items=items_sorted)
+    out_html = html_page(generated_at=generated_at, summary_text=summary_text, items=items_sorted, now_utc=now_utc)
 
     out_dir = os.path.join(os.getcwd(), "public")
     os.makedirs(out_dir, exist_ok=True)
