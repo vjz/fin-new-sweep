@@ -183,14 +183,22 @@ def html_page(*, generated_at: str, summary_text: str, items: list[dict], now_ut
             f"<a href=\"{esc(link)}\" target=\"_blank\" rel=\"noopener noreferrer\">{esc(title)}</a> {src_txt}{pw}{newpill}"
         )
 
-    # Build top links list
+    # Build top links list with per-source cap (more Techmeme-ish diversity)
     lis = []
-    for it in items[:TOP_N]:
+    per_source_cap = int(os.getenv("FIN_NEWS_SWEEP_PER_SOURCE_CAP", "3"))
+    counts: dict[str, int] = {}
+
+    for it in items:
+        if len(lis) >= TOP_N:
+            break
         title = str(it.get("title") or "").strip()
         link = str(it.get("link") or "").strip()
-        src = str(it.get("source") or "").strip()
+        src = str(it.get("source") or "").strip() or "(unknown)"
         if not title or not link:
             continue
+        if counts.get(src, 0) >= per_source_cap:
+            continue
+
         dom = domain(link)
         pw = " <span class=\"pill\">paywalled</span>" if is_paywalled(dom) else ""
         newpill = " <span class=\"pill new\">NEW</span>" if is_new(str(it.get("published") or ""), now_utc) else ""
@@ -198,6 +206,7 @@ def html_page(*, generated_at: str, summary_text: str, items: list[dict], now_ut
         lis.append(
             f"<li><a href=\"{esc(link)}\" target=\"_blank\" rel=\"noopener noreferrer\">{esc(title)}</a> {src_txt}{pw}{newpill}</li>"
         )
+        counts[src] = counts.get(src, 0) + 1
 
     # Storylines HTML (each category + example links)
     story_html = ""
