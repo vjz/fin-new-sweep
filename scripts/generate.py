@@ -20,12 +20,13 @@ import os
 import re
 import subprocess
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo
 
 ROOT = "/home/vjshrike/clawd"
 INBOX = os.path.join(ROOT, "store/news-sweep/inbox.json")
 NEWS_SWEEP_CLI = os.path.join(ROOT, "scripts/news_sweep_cli.py")
 
-SITE_TITLE = os.getenv("FIN_NEWS_SWEEP_TITLE", "Fin New Sweep")
+SITE_TITLE = os.getenv("FIN_NEWS_SWEEP_TITLE", "Finance News Sweep")
 TOP_N = int(os.getenv("FIN_NEWS_SWEEP_TOP_N", "20"))
 
 # Mark paywalled domains (keep links, but label).
@@ -224,6 +225,15 @@ def html_page(*, generated_at: str, summary_text: str, items: list[dict]) -> str
 </html>"""
 
 
+def fmt_updated(now_utc: dt.datetime) -> str:
+    la = ZoneInfo("America/Los_Angeles")
+    now_local = now_utc.astimezone(la)
+    # Example: Fri Mar 13, 2026 11:43 AM PT (18:43 UTC)
+    local_str = now_local.strftime("%a %b %d, %Y %I:%M %p %Z")
+    utc_str = now_utc.strftime("%H:%M UTC")
+    return f"{local_str} ({utc_str})"
+
+
 def main() -> int:
     inbox = read_inbox()
     items = inbox.get("items") or []
@@ -237,7 +247,8 @@ def main() -> int:
     items_sorted = sorted([it for it in items if isinstance(it, dict)], key=k, reverse=True)
 
     summary_text = run_summary()
-    generated_at = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
+    now_utc = dt.datetime.now(dt.timezone.utc)
+    generated_at = fmt_updated(now_utc)
 
     out_html = html_page(generated_at=generated_at, summary_text=summary_text, items=items_sorted)
 
