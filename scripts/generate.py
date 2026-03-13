@@ -216,7 +216,7 @@ def html_page(*, generated_at: str, summary_text: str, items: list[dict], now_ut
             raw_name = str(s.get("name") or "").strip()
             # "Other" is the CLI's catch-all bucket; render as something human.
             if raw_name.lower() == "other":
-                raw_name = "General"
+                raw_name = "Macro & Markets"
             name = esc(raw_name)
             cnt = int(s.get("count") or 0)
             ex = s.get("examples") or []
@@ -264,7 +264,7 @@ def html_page(*, generated_at: str, summary_text: str, items: list[dict], now_ut
     </div>
 
     <div class=\"card\">
-      <h2 style=\"margin-top:0\">Top links</h2>
+      <h2 style=\"margin-top:0\">Top Links</h2>
       <ul>
         {''.join(lis) if lis else '<li>(no links)</li>'}
       </ul>
