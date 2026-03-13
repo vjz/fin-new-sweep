@@ -213,7 +213,11 @@ def html_page(*, generated_at: str, summary_text: str, items: list[dict], now_ut
     if storylines:
         blocks = []
         for s in storylines:
-            name = esc(str(s.get("name") or ""))
+            raw_name = str(s.get("name") or "").strip()
+            # "Other" is the CLI's catch-all bucket; render as something human.
+            if raw_name.lower() == "other":
+                raw_name = "General"
+            name = esc(raw_name)
             cnt = int(s.get("count") or 0)
             ex = s.get("examples") or []
             ex_lines = "".join([f"<li>{render_link(t)}</li>" for t in ex[:3] if str(t).strip()])
