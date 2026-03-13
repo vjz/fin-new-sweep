@@ -1,0 +1,4 @@
+# Do not publish local inbox/cache
+store/
+*.log
+.DS_Store
