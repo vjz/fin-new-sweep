@@ -17,6 +17,7 @@ import datetime as dt
 import html
 import json
 import os
+import re
 import subprocess
 from urllib.parse import urlparse
 
@@ -80,9 +81,72 @@ def is_paywalled(dom: str) -> bool:
     return any(dom.endswith("." + d) for d in PAYWALLED)
 
 
+def parse_storylines(summary_text: str) -> list[dict]:
+    """Parse the 'TOP STORYLINES' section from news_sweep_cli.py summary output."""
+    lines = [ln.rstrip() for ln in (summary_text or "").splitlines()]
+    out: list[dict] = []
+    in_top = False
+    cur = None
+
+    for ln in lines:
+        if ln.strip() == "TOP STORYLINES:" or ln.strip().startswith("TOP STORYLINES"):
+            in_top = True
+            continue
+        if not in_top:
+            continue
+        if not ln.strip():
+            continue
+
+        m = re.match(r"^[-•]\s*(.+?)\s*\((\d+)\)\s*$", ln.strip())
+        if m:
+            # start new category
+            if cur:
+                out.append(cur)
+            cur = {"name": m.group(1).strip(), "count": int(m.group(2)), "examples": []}
+            continue
+
+        # bullet examples appear as indented • or -
+        m2 = re.match(r"^[\s]*[•\-]\s+(.*)$", ln)
+        if m2 and cur is not None:
+            cur["examples"].append(m2.group(1).strip())
+
+    if cur:
+        out.append(cur)
+
+    return out
+
+
+def map_title_to_link(items: list[dict]) -> dict[str, dict]:
+    m: dict[str, dict] = {}
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        title = str(it.get("title") or "").strip()
+        link = str(it.get("link") or "").strip()
+        if title and link and title not in m:
+            m[title] = it
+    return m
+
+
 def html_page(*, generated_at: str, summary_text: str, items: list[dict]) -> str:
     def esc(s: str) -> str:
         return html.escape(s or "")
+
+    title_map = map_title_to_link(items)
+    storylines = parse_storylines(summary_text)
+
+    def render_link(title: str) -> str:
+        it = title_map.get(title)
+        if not it:
+            return esc(title)
+        link = str(it.get("link") or "").strip()
+        src = str(it.get("source") or "").strip()
+        dom = domain(link)
+        pw = " <span class=\"pill\">paywalled</span>" if is_paywalled(dom) else ""
+        src_txt = f"<span class=\"src\">{esc(src)}</span>" if src else ""
+        return (
+            f"<a href=\"{esc(link)}\" target=\"_blank\" rel=\"noopener noreferrer\">{esc(title)}</a> {src_txt}{pw}"
+        )
 
     # Build top links list
     lis = []
@@ -99,10 +163,19 @@ def html_page(*, generated_at: str, summary_text: str, items: list[dict]) -> str
             f"<li><a href=\"{esc(link)}\" target=\"_blank\" rel=\"noopener noreferrer\">{esc(title)}</a> {src_txt}{pw}</li>"
         )
 
-    summary_html = ""
-    if summary_text:
-        # Preserve line breaks as <pre> but keep styling nice
-        summary_html = f"<pre class=\"summary\">{esc(summary_text)}</pre>"
+    # Storylines HTML (each category + example links)
+    story_html = ""
+    if storylines:
+        blocks = []
+        for s in storylines:
+            name = esc(str(s.get("name") or ""))
+            cnt = int(s.get("count") or 0)
+            ex = s.get("examples") or []
+            ex_lines = "".join([f"<li>{render_link(t)}</li>" for t in ex[:3] if str(t).strip()])
+            blocks.append(
+                f"<div class=\"story\"><div class=\"storyhdr\">{name} <span class=\"count\">({cnt})</span></div><ul class=\"tight\">{ex_lines or '<li>(no examples)</li>'}</ul></div>"
+            )
+        story_html = "".join(blocks)
 
     return f"""<!doctype html>
 <html lang=\"en\">
@@ -118,24 +191,26 @@ def html_page(*, generated_at: str, summary_text: str, items: list[dict]) -> str
     .grid {{ display: grid; grid-template-columns: 1fr; gap: 18px; }}
     @media (min-width: 900px) {{ .grid {{ grid-template-columns: 1fr 1fr; }} }}
     .card {{ border: 1px solid rgba(127,127,127,0.35); border-radius: 12px; padding: 14px 16px; }}
-    .summary {{ white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace; font-size: 13px; line-height: 1.35; }}
     ul {{ margin: 0; padding-left: 18px; }}
     li {{ margin: 8px 0; }}
+    .tight li {{ margin: 6px 0; }}
     a {{ text-decoration: none; }}
     a:hover {{ text-decoration: underline; }}
     .src {{ margin-left: 6px; opacity: 0.8; font-size: 12px; }}
     .pill {{ display: inline-block; margin-left: 8px; font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(127,127,127,0.35); opacity: 0.85; }}
-    footer {{ margin-top: 24px; opacity: 0.7; font-size: 12px; }}
+    .story {{ margin: 10px 0 14px 0; padding-top: 8px; border-top: 1px dashed rgba(127,127,127,0.25); }}
+    .storyhdr {{ font-weight: 650; margin-bottom: 6px; }}
+    .count {{ opacity: 0.75; font-weight: 500; }}
   </style>
 </head>
 <body>
   <h1>{esc(SITE_TITLE)}</h1>
-  <div class=\"meta\">Generated at {esc(generated_at)}</div>
+  <div class=\"meta\">Updated {esc(generated_at)}</div>
 
   <div class=\"grid\">
     <div class=\"card\">
-      <h2 style=\"margin-top:0\">RSS summary</h2>
-      {summary_html or '<div style="opacity:0.8">(summary unavailable)</div>'}
+      <h2 style=\"margin-top:0\">Storylines</h2>
+      {story_html or '<div style="opacity:0.8">(storylines unavailable)</div>'}
     </div>
 
     <div class=\"card\">
@@ -145,10 +220,6 @@ def html_page(*, generated_at: str, summary_text: str, items: list[dict]) -> str
       </ul>
     </div>
   </div>
-
-  <footer>
-    Built from a local RSS inbox; only this rendered page is public.
-  </footer>
 </body>
 </html>"""
 
