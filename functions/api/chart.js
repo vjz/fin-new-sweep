@@ -38,8 +38,10 @@ export async function onRequestGet({ request }) {
   const result = obj?.chart?.result?.[0];
   const meta = result?.meta || {};
   const closes = (result?.indicators?.quote?.[0]?.close || []).filter(Number.isFinite);
+  // For multi-day chart requests, chartPreviousClose is the close before the
+  // requested range, not yesterday's close. Use the last two daily closes.
   const last = Number(meta.regularMarketPrice ?? closes.at(-1));
-  const prev = Number(meta.previousClose ?? meta.chartPreviousClose ?? closes.at(-2));
+  const prev = Number(closes.length >= 2 ? closes.at(-2) : undefined);
 
   if (!Number.isFinite(last) || !Number.isFinite(prev) || prev === 0) {
     return json({ error: 'bad upstream data' }, { status: 502 });
