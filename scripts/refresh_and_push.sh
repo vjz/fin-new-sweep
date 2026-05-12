@@ -9,13 +9,13 @@ cd /home/vjshrike/clawd/projects/fin-new-sweep
 python3 scripts/generate.py >/dev/null
 
 # Commit + push if changed
-if git diff --quiet -- public/index.html public/dashboard.js public/robots.txt public/sitemap.xml \
-  && git diff --cached --quiet -- public/index.html public/dashboard.js public/robots.txt public/sitemap.xml \
-  && [[ -z "$(git ls-files --others --exclude-standard public/dashboard.js)" ]]; then
+if git diff --quiet -- public/index.html public/dashboard.js functions/api/chart.js public/robots.txt public/sitemap.xml \
+  && git diff --cached --quiet -- public/index.html public/dashboard.js functions/api/chart.js public/robots.txt public/sitemap.xml \
+  && [[ -z "$(git ls-files --others --exclude-standard public/dashboard.js functions/api/chart.js)" ]]; then
   exit 0
 fi
 
-git add public/index.html public/dashboard.js public/robots.txt public/sitemap.xml
+git add public/index.html public/dashboard.js functions/api/chart.js public/robots.txt public/sitemap.xml
 
 git commit -m "Update site $(date -u +'%Y-%m-%dT%H:%MZ')" >/dev/null || exit 0
 

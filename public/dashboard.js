@@ -33,16 +33,14 @@
   }
 
   async function quote(symbol) {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=5d&interval=1d&includePrePost=true`;
+    const url = `/api/chart?symbol=${encodeURIComponent(symbol)}`;
     const res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`Yahoo ${symbol}: ${res.status}`);
+    if (!res.ok) throw new Error(`chart ${symbol}: ${res.status}`);
     const obj = await res.json();
-    const result = obj?.chart?.result?.[0];
-    const meta = result?.meta || {};
-    const closes = (result?.indicators?.quote?.[0]?.close || []).filter(Number.isFinite);
-    const last = Number(meta.regularMarketPrice ?? closes.at(-1));
-    const prev = Number(meta.previousClose ?? meta.chartPreviousClose ?? closes.at(-2));
-    return { symbol, last, prev, move: pct(last, prev) };
+    const last = Number(obj.last);
+    const prev = Number(obj.prev);
+    const move = Number.isFinite(obj.move) ? obj.move : pct(last, prev);
+    return { symbol, last, prev, move };
   }
 
   function regime(moves) {
@@ -73,7 +71,7 @@
 
     document.getElementById('dashboard-lines').innerHTML = lines.join('');
     document.getElementById('dashboard-regime').textContent = `Regime: ${regime(moves)}`;
-    document.getElementById('dashboard-time').textContent = `Live via Yahoo Finance • ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles', timeZoneName: 'short' })}`;
+    document.getElementById('dashboard-time').textContent = `Live via Yahoo Finance proxy • ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles', timeZoneName: 'short' })}`;
   }
 
   async function main() {
