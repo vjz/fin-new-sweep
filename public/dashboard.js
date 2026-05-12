@@ -2,10 +2,8 @@
   const GROUPS = [
     ['Equities', [['SPY', 'SPY'], ['QQQ', 'QQQ'], ['IWM', 'IWM']]],
     ['Futures', [['ES', 'ES=F'], ['YM', 'YM=F'], ['NQ', 'NQ=F']]],
-    ['Rates', [['TLT', 'TLT']]],
-    ['FX', [['UUP', 'UUP']]],
+    ['Rates / FX / Vol', [['TLT', 'TLT'], ['UUP', 'UUP'], ['VIX', '^VIX']]],
     ['Commodities', [['USO', 'USO'], ['GLD', 'GLD'], ['COPX', 'COPX']]],
-    ['Vol', [['VIX', '^VIX']]],
   ];
 
   const tracked = Object.fromEntries(

@@ -333,7 +333,7 @@ def html_page(*, generated_at: str, summary_text: str, items: list[dict], now_ut
       </ul>
     </div>
   </div>
-  <script src="dashboard.js?v=20260512-0108" defer></script>
+  <script src="dashboard.js?v=20260512-0110" defer></script>
 </body>
 </html>"""
 
