@@ -21,7 +21,10 @@ export async function onRequestGet({ request }) {
     return json({ error: 'symbol not allowed' }, { status: 400 });
   }
 
-  const yahoo = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=5d&interval=1d&includePrePost=true`;
+  const isFuture = symbol.endsWith('=F');
+  const range = isFuture ? '1d' : '5d';
+  const interval = isFuture ? '1m' : '1d';
+  const yahoo = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=${interval}&includePrePost=true`;
   const res = await fetch(yahoo, {
     headers: {
       'accept': 'application/json',
@@ -38,10 +41,15 @@ export async function onRequestGet({ request }) {
   const result = obj?.chart?.result?.[0];
   const meta = result?.meta || {};
   const closes = (result?.indicators?.quote?.[0]?.close || []).filter(Number.isFinite);
-  // For multi-day chart requests, chartPreviousClose is the close before the
-  // requested range, not yesterday's close. Use the last two daily closes.
   const last = Number(meta.regularMarketPrice ?? closes.at(-1));
-  const prev = Number(closes.length >= 2 ? closes.at(-2) : undefined);
+  // For stocks/ETFs, chartPreviousClose on range=5d is the close before the
+  // requested range, so use the last two daily closes. For futures, use a 1d
+  // intraday chart where Yahoo exposes the prior settlement as previousClose.
+  const prev = Number(
+    isFuture
+      ? (meta.previousClose ?? meta.chartPreviousClose)
+      : (closes.length >= 2 ? closes.at(-2) : undefined)
+  );
 
   if (!Number.isFinite(last) || !Number.isFinite(prev) || prev === 0) {
     return json({ error: 'bad upstream data' }, { status: 502 });

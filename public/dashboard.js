@@ -20,7 +20,7 @@
   function fmt(label, move) {
     if (!Number.isFinite(move)) return `${label} n/a`;
     const sign = move >= 0 ? '+' : '';
-    return `${label} ${sign}${move.toFixed(1)}%`;
+    return `${label} ${sign}${move.toFixed(2)}%`;
   }
 
   function hourPT() {
