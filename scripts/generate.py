@@ -27,6 +27,7 @@ INBOX = os.path.join(ROOT, "store/news-sweep/inbox.json")
 NEWS_SWEEP_CLI = os.path.join(ROOT, "scripts/news_sweep_cli.py")
 
 SITE_TITLE = os.getenv("FIN_NEWS_SWEEP_TITLE", "Finance News Sweep")
+BASE_URL = os.getenv("FIN_NEWS_SWEEP_BASE_URL", "").rstrip("/")
 TOP_N = int(os.getenv("FIN_NEWS_SWEEP_TOP_N", "20"))
 NEW_HOURS = float(os.getenv("FIN_NEWS_SWEEP_NEW_HOURS", "6"))
 
@@ -162,12 +163,52 @@ def map_title_to_link(items: list[dict]) -> dict[str, dict]:
     return m
 
 
+
+EARNINGS_TERMS = re.compile(
+    r"\b(earnings?|eps|revenue|sales miss|sales beat|results?|quarterly|q[1-4]|fy\d{2,4}|guidance|buyback|transcript)\b",
+    re.IGNORECASE,
+)
+
+
+def is_earnings_text(text: str) -> bool:
+    """Return True for earnings/results-related buckets and headlines.
+
+    Finance News Sweep intentionally excludes earnings-specific features; this
+    keeps generic RSS pulls from reintroducing an Earnings/Results section.
+    """
+    return bool(EARNINGS_TERMS.search(text or ""))
+
+
 def html_page(*, generated_at: str, summary_text: str, items: list[dict], now_utc: dt.datetime) -> str:
     def esc(s: str) -> str:
         return html.escape(s or "")
 
     title_map = map_title_to_link(items)
-    storylines = parse_storylines(summary_text)
+    storylines = [
+        s for s in parse_storylines(summary_text)
+        if not is_earnings_text(str(s.get("name") or ""))
+    ]
+    story_titles = {
+        str(t).strip().lower()
+        for s in storylines
+        for t in (s.get("examples") or [])
+        if str(t).strip()
+    }
+
+    # Daily meta title/description
+    la = ZoneInfo("America/Los_Angeles")
+    day_label = now_utc.astimezone(la).strftime("%b %d")
+    top_names = [str(s.get("name") or "").strip() for s in storylines if str(s.get("name") or "").strip()]
+    top_names = ["Macro & Markets" if n.lower() == "other" else n for n in top_names]
+    top3 = "; ".join(top_names[:3])
+    meta_title = f"{SITE_TITLE} — {day_label}"
+    if top3:
+        meta_title = f"{SITE_TITLE} — {day_label}: {top3}"
+    meta_desc = "Clean, clutter‑free finance headlines grouped by storyline."
+    if top3:
+        meta_desc = f"Top storylines: {top3}. Clean, clutter‑free finance headlines." 
+
+    og_url = BASE_URL or ""
 
     def render_link(title: str) -> str:
         it = title_map.get(title)
@@ -196,6 +237,10 @@ def html_page(*, generated_at: str, summary_text: str, items: list[dict], now_ut
         src = str(it.get("source") or "").strip() or "(unknown)"
         if not title or not link:
             continue
+        if is_earnings_text(title) or is_earnings_text(link):
+            continue
+        if title.strip().lower() in story_titles:
+            continue
         if counts.get(src, 0) >= per_source_cap:
             continue
 
@@ -219,7 +264,7 @@ def html_page(*, generated_at: str, summary_text: str, items: list[dict], now_ut
                 raw_name = "Macro & Markets"
             name = esc(raw_name)
             cnt = int(s.get("count") or 0)
-            ex = s.get("examples") or []
+            ex = [t for t in (s.get("examples") or []) if not is_earnings_text(str(t))]
             ex_lines = "".join([f"<li>{render_link(t)}</li>" for t in ex[:3] if str(t).strip()])
             blocks.append(
                 f"<div class=\"story\"><div class=\"storyhdr\">{name} <span class=\"count\">({cnt})</span></div><ul class=\"tight\">{ex_lines or '<li>(no examples)</li>'}</ul></div>"
@@ -231,7 +276,17 @@ def html_page(*, generated_at: str, summary_text: str, items: list[dict], now_ut
 <head>
   <meta charset=\"utf-8\" />
   <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
-  <title>{esc(SITE_TITLE)}</title>
+  <title>{esc(meta_title)}</title>
+  <meta name="description" content="{esc(meta_desc)}" />
+  <meta property="og:title" content="{esc(meta_title)}" />
+  <meta property="og:description" content="{esc(meta_desc)}" />
+  <meta property="og:type" content="website" />
+  {f'<meta property="og:url" content="{esc(og_url)}" />' if og_url else ''}
+  <meta property="og:site_name" content="{esc(SITE_TITLE)}" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="{esc(meta_title)}" />
+  <meta name="twitter:description" content="{esc(meta_desc)}" />
+  {f'<link rel="canonical" href="{esc(og_url)}" />' if og_url else ''}
   <style>
     :root {{ color-scheme: light dark; }}
     body {{ font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; margin: 24px; max-width: 980px; }}
@@ -257,6 +312,14 @@ def html_page(*, generated_at: str, summary_text: str, items: list[dict], now_ut
   <h1>{esc(SITE_TITLE)}</h1>
   <div class=\"meta\">Updated {esc(generated_at)}</div>
 
+  <div class=\"card\" style=\"margin-bottom:16px\">
+    <div style=\"font-size:14px; font-weight:600; margin-bottom:2px;\">Cross-Asset Dashboard</div>
+    <div id=\"dashboard-time\" style=\"font-size:12px; opacity:0.75; margin-bottom:6px;\">Loading live Yahoo Finance data…</div>
+    <div id=\"dashboard-lines\" style=\"font-size:13px; line-height:1.5;\">(loading)</div>
+    <div id=\"dashboard-regime\" style=\"margin-top:6px; font-size:13px; font-weight:600;\">Regime: —</div>
+  </div>
+
+
   <div class=\"grid\">
     <div class=\"card\">
       <h2 style=\"margin-top:0\">Storylines</h2>
@@ -270,6 +333,7 @@ def html_page(*, generated_at: str, summary_text: str, items: list[dict], now_ut
       </ul>
     </div>
   </div>
+  <script src="dashboard.js" defer></script>
 </body>
 </html>"""
 
@@ -301,11 +365,29 @@ def main() -> int:
 
     out_html = html_page(generated_at=generated_at, summary_text=summary_text, items=items_sorted, now_utc=now_utc)
 
-    out_dir = os.path.join(os.getcwd(), "public")
+    out_dir = os.path.join(ROOT, "projects", "fin-new-sweep", "public")
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, "index.html")
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(out_html)
+
+    # robots.txt and sitemap.xml (best-effort)
+    if BASE_URL:
+        robots = f"User-agent: *\nAllow: /\nSitemap: {BASE_URL}/sitemap.xml\n"
+        sitemap = (
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+            "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n"
+            f"  <url>\n    <loc>{BASE_URL}/</loc>\n    <lastmod>{now_utc.date().isoformat()}</lastmod>\n  </url>\n"
+            "</urlset>\n"
+        )
+    else:
+        robots = "User-agent: *\nAllow: /\n"
+        sitemap = ""
+
+    with open(os.path.join(out_dir, "robots.txt"), "w", encoding="utf-8") as f:
+        f.write(robots)
+    with open(os.path.join(out_dir, "sitemap.xml"), "w", encoding="utf-8") as f:
+        f.write(sitemap)
 
     print(out_path)
     return 0

@@ -1,0 +1,99 @@
+(() => {
+  const GROUPS = [
+    ['Equities', [['QQQ', 'QQQ'], ['SPY', 'SPY'], ['IWM', 'IWM']]],
+    ['Futures', [['ES', 'ES=F'], ['YM', 'YM=F'], ['NQ', 'NQ=F']]],
+    ['Rates', [['TLT', 'TLT']]],
+    ['FX', [['UUP', 'UUP']]],
+    ['Commodities', [['USO', 'USO'], ['GLD', 'GLD'], ['COPX', 'COPX']]],
+    ['Vol', [['VIX', '^VIX']]],
+  ];
+
+  const tracked = Object.fromEntries(
+    GROUPS.flatMap(([, items]) => items.map(([label, symbol]) => [label, symbol]))
+  );
+
+  function pct(last, prev) {
+    if (!Number.isFinite(last) || !Number.isFinite(prev) || prev === 0) return null;
+    return ((last - prev) / prev) * 100;
+  }
+
+  function fmt(label, move) {
+    if (!Number.isFinite(move)) return `${label} n/a`;
+    const sign = move >= 0 ? '+' : '';
+    return `${label} ${sign}${move.toFixed(1)}%`;
+  }
+
+  function hourPT() {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Los_Angeles',
+      hour: '2-digit',
+      hour12: false,
+    }).formatToParts(new Date());
+    return Number((parts.find((p) => p.type === 'hour')?.value || '0').replace('24', '0'));
+  }
+
+  async function quote(symbol) {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=5d&interval=1d&includePrePost=true`;
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`Yahoo ${symbol}: ${res.status}`);
+    const obj = await res.json();
+    const result = obj?.chart?.result?.[0];
+    const meta = result?.meta || {};
+    const closes = (result?.indicators?.quote?.[0]?.close || []).filter(Number.isFinite);
+    const last = Number(meta.regularMarketPrice ?? closes.at(-1));
+    const prev = Number(meta.previousClose ?? meta.chartPreviousClose ?? closes.at(-2));
+    return { symbol, last, prev, move: pct(last, prev) };
+  }
+
+  function regime(moves) {
+    const qqq = moves.QQQ?.move ?? 0;
+    const tlt = moves.TLT?.move ?? 0;
+    const uup = moves.UUP?.move ?? 0;
+    const uso = moves.USO?.move ?? 0;
+    const gld = moves.GLD?.move ?? 0;
+    let score = 0;
+    score += qqq > 0 ? 1 : -1;
+    score += tlt > 0 ? 1 : -1;
+    score += uso > 0 ? 1 : 0;
+    score += gld > 0 ? 1 : 0;
+    score += uup > 0 ? 1 : 0;
+    if (score >= 3) return 'Risk-off / inflationary';
+    if (score <= -2) return 'Risk-on';
+    return 'Mixed';
+  }
+
+  function render(moves) {
+    const includeFutures = hourPT() >= 18 || hourPT() < 6;
+    const lines = GROUPS
+      .filter(([name]) => includeFutures || name !== 'Futures')
+      .map(([name, items]) => {
+        const text = items.map(([label]) => fmt(label, moves[label]?.move)).join(' | ');
+        return `<div>${name}: ${text}</div>`;
+      });
+
+    document.getElementById('dashboard-lines').innerHTML = lines.join('');
+    document.getElementById('dashboard-regime').textContent = `Regime: ${regime(moves)}`;
+    document.getElementById('dashboard-time').textContent = `Live via Yahoo Finance • ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles', timeZoneName: 'short' })}`;
+  }
+
+  async function main() {
+    const entries = await Promise.allSettled(
+      Object.entries(tracked).map(async ([label, symbol]) => [label, await quote(symbol)])
+    );
+    const moves = {};
+    for (const entry of entries) {
+      if (entry.status === 'fulfilled') {
+        const [label, data] = entry.value;
+        moves[label] = data;
+      }
+    }
+    if (!Object.keys(moves).length) throw new Error('no live data');
+    render(moves);
+  }
+
+  main().catch(() => {
+    document.getElementById('dashboard-time').textContent = 'Live dashboard unavailable';
+    document.getElementById('dashboard-lines').textContent = '(Yahoo Finance request failed)';
+    document.getElementById('dashboard-regime').textContent = 'Regime: —';
+  });
+})();

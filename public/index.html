@@ -37,13 +37,13 @@
 </head>
 <body>
   <h1>Finance News Sweep</h1>
-  <div class="meta">Updated Mon May 11, 2026 05:00 PM PDT (00:00 UTC)</div>
+  <div class="meta">Updated Mon May 11, 2026 05:05 PM PDT (00:05 UTC)</div>
 
   <div class="card" style="margin-bottom:16px">
     <div style="font-size:14px; font-weight:600; margin-bottom:2px;">Cross-Asset Dashboard</div>
-    <div style="font-size:12px; opacity:0.75; margin-bottom:6px;">Mon May 11, 2026 12:00 AM PDT</div>
-    <div style="font-size:13px; line-height:1.5;"><div>Equities: QQQ +2.3% | SPY +0.8% | IWM +0.7%</div><div>Rates: TLT +0.5%</div><div>FX: UUP -0.3%</div><div>Commodities: USO -1.0% | GLD +0.5% | COPX +4.1%</div><div>Vol: VIX +0.6%</div></div>
-    <div style="margin-top:6px; font-size:13px; font-weight:600;">Regime: Risk-off / inflationary</div>
+    <div id="dashboard-time" style="font-size:12px; opacity:0.75; margin-bottom:6px;">Loading live Yahoo Finance data…</div>
+    <div id="dashboard-lines" style="font-size:13px; line-height:1.5;">(loading)</div>
+    <div id="dashboard-regime" style="margin-top:6px; font-size:13px; font-weight:600;">Regime: —</div>
   </div>
 
 
@@ -60,5 +60,6 @@
       </ul>
     </div>
   </div>
+  <script src="dashboard.js" defer></script>
 </body>
 </html>
