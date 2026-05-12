@@ -1,6 +1,6 @@
 (() => {
   const GROUPS = [
-    ['Equities', [['QQQ', 'QQQ'], ['SPY', 'SPY'], ['IWM', 'IWM']]],
+    ['Equities', [['SPY', 'SPY'], ['QQQ', 'QQQ'], ['IWM', 'IWM']]],
     ['Futures', [['ES', 'ES=F'], ['YM', 'YM=F'], ['NQ', 'NQ=F']]],
     ['Rates', [['TLT', 'TLT']]],
     ['FX', [['UUP', 'UUP']]],
@@ -17,10 +17,15 @@
     return ((last - prev) / prev) * 100;
   }
 
+  const COLOR_THRESHOLD = 0.25;
+
   function fmt(label, move) {
     if (!Number.isFinite(move)) return `${label} n/a`;
     const sign = move >= 0 ? '+' : '';
-    return `${label} ${sign}${move.toFixed(2)}%`;
+    const text = `${label} ${sign}${move.toFixed(2)}%`;
+    if (move >= COLOR_THRESHOLD) return `<span style="color:#15803d">${text}</span>`;
+    if (move <= -COLOR_THRESHOLD) return `<span style="color:#dc2626">${text}</span>`;
+    return text;
   }
 
   function hourPT() {
