@@ -2,3 +2,4 @@
 store/
 *.log
 .DS_Store
+.wrangler/

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Fundamentals — Finance News Sweep</title>
+  <meta name="description" content="SEC-backed fundamentals table with cached Cloudflare Pages endpoint." />
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      margin: 24px;
+      max-width: 980px;
+      line-height: 1.4;
+    }
+    header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+    h1 { margin: 0; font-size: 28px; }
+    a { color: inherit; opacity: 0.8; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    form {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 14px;
+      max-width: 420px;
+    }
+    input, button {
+      font: inherit;
+      border: 1px solid rgba(127,127,127,0.4);
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: transparent;
+      color: inherit;
+    }
+    input { flex: 1; text-transform: uppercase; min-width: 0; }
+    button { cursor: pointer; font-weight: 650; }
+    .meta { opacity: 0.72; font-size: 13px; margin-bottom: 14px; }
+    pre {
+      border: 1px solid rgba(127,127,127,0.35);
+      border-radius: 8px;
+      padding: 14px 16px;
+      overflow-x: auto;
+      white-space: pre;
+      min-height: 220px;
+      font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Fundamentals</h1>
+    <a href="/">News Sweep</a>
+  </header>
+
+  <form id="fund-form">
+    <input id="ticker" name="ticker" autocomplete="off" value="WMT" aria-label="Ticker" />
+    <button type="submit">Load</button>
+  </form>
+  <div id="meta" class="meta">SEC companyfacts + Yahoo chart metadata, cached at the edge.</div>
+  <pre id="output">Loading WMT...</pre>
+
+  <script src="/fund/fund.js" defer></script>
+</body>
+</html>
