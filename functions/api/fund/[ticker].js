@@ -1,4 +1,4 @@
-const SEC_UA = 'OpenClaw fin-new-sweep fund endpoint; contact: vjshrike';
+const SEC_UA = 'fin-new-sweep/1.0 dealzen.km@gmail.com';
 const YAHOO_UA = 'Mozilla/5.0 fin-new-sweep fund endpoint';
 
 const TTL = {
@@ -6,6 +6,8 @@ const TTL = {
   chart: 30 * 60,
   cikMap: 30 * 24 * 60 * 60,
   companyfacts: 14 * 24 * 60 * 60,
+  submissions: 14 * 24 * 60 * 60,
+  businessDescription: 30 * 24 * 60 * 60,
   blocked: 15 * 60,
 };
 
@@ -59,6 +61,88 @@ function truncate(value, maxLen) {
   const textValue = String(value || '').replace(/\s+/g, ' ').trim();
   if (textValue.length <= maxLen) return textValue;
   return `${textValue.slice(0, Math.max(0, maxLen - 3)).trim()}...`;
+}
+
+function decodeHtml(value) {
+  return String(value || '')
+    .replace(/&nbsp;|&#160;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;|&#34;/gi, '"')
+    .replace(/&apos;|&#39;|&#8217;|&rsquo;/gi, "'")
+    .replace(/&#8220;|&ldquo;/gi, '"')
+    .replace(/&#8221;|&rdquo;/gi, '"')
+    .replace(/&#8211;|&ndash;/gi, '-')
+    .replace(/&#8212;|&mdash;/gi, '-')
+    .replace(/&#(\d+);/g, (_, code) => {
+      const num = Number(code);
+      return Number.isFinite(num) ? String.fromCharCode(num) : '';
+    });
+}
+
+function cleanHtmlText(html) {
+  return decodeHtml(html)
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<ix:header[\s\S]*?<\/ix:header>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function locationFromSubmission(submission) {
+  const address = submission?.addresses?.business || submission?.addresses?.mailing || {};
+  return [address.city, address.stateOrCountryDescription || address.stateOrCountry]
+    .filter(Boolean)
+    .join(', ') || '--';
+}
+
+function latestAnnualFiling(submission) {
+  const recent = submission?.filings?.recent || {};
+  const forms = recent.form || [];
+  for (let i = 0; i < forms.length; i += 1) {
+    if (forms[i] !== '10-K') continue;
+    if (!recent.accessionNumber?.[i] || !recent.primaryDocument?.[i]) continue;
+    return {
+      form: forms[i],
+      accessionNumber: recent.accessionNumber[i],
+      primaryDocument: recent.primaryDocument[i],
+      filingDate: recent.filingDate?.[i] || '',
+    };
+  }
+  return null;
+}
+
+function trimBusinessDescription(segment) {
+  let textValue = segment
+    .replace(/^item\s+1\.?\s+business\s*/i, '')
+    .replace(/^(general|overview|our company)\s+/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const sentenceMatches = textValue.match(/[^.!?]+[.!?]+(?:\s|$)/g) || [];
+  if (sentenceMatches.length) {
+    textValue = sentenceMatches.slice(0, 3).join(' ').trim();
+  }
+  return truncate(textValue, 700);
+}
+
+function extractBusinessDescription(html) {
+  const textValue = cleanHtmlText(html);
+  const starts = [...textValue.matchAll(/item\s+1\.?\s+business/gi)].map((match) => match.index);
+  const ends = [...textValue.matchAll(/item\s+1a\.?\s+risk\s+factors/gi)].map((match) => match.index);
+  const candidates = [];
+
+  for (const start of starts) {
+    const end = ends.find((idx) => idx > start) || Math.min(textValue.length, start + 100000);
+    const segment = textValue.slice(start, end);
+    if (segment.length < 1200 || segment.length > 120000) continue;
+    if (/item\s+1\.?\s+business\s*["'.]*\s*\d+\s+item\s+3/i.test(segment.slice(0, 180))) continue;
+    if (/item\s+1\.?\s+business\s*["'.]*\s+above contains/i.test(segment.slice(0, 180))) continue;
+    candidates.push(segment);
+  }
+
+  if (!candidates.length) return '';
+  return trimBusinessDescription(candidates[0]);
 }
 
 async function kvGet(env, key) {
@@ -142,6 +226,42 @@ async function fetchCompanyfacts(cik, env) {
   });
 }
 
+async function fetchSubmissions(cik, env) {
+  return cachedJson(env, `sec:submissions:${cik}:v1`, TTL.submissions, async () => {
+    const padded = String(cik).padStart(10, '0');
+    const url = `https://data.sec.gov/submissions/CIK${padded}.json`;
+    return fetchJson(url, {
+      headers: { accept: 'application/json', 'user-agent': SEC_UA },
+      cf: { cacheTtl: TTL.submissions, cacheEverything: true },
+    });
+  });
+}
+
+async function fetchBusinessDescription(cik, submission, env) {
+  const filing = latestAnnualFiling(submission);
+  if (!filing) return { data: { summary: '', filingDate: '' }, cache: 'none' };
+
+  return cachedJson(env, `sec:business-description:${cik}:${filing.accessionNumber}:v1`, TTL.businessDescription, async () => {
+    const accession = filing.accessionNumber.replace(/-/g, '');
+    const url = `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${accession}/${filing.primaryDocument}`;
+    const res = await fetch(url, {
+      headers: { accept: 'text/html,application/xhtml+xml', 'user-agent': SEC_UA },
+      cf: { cacheTtl: TTL.businessDescription, cacheEverything: true },
+    });
+    if (!res.ok) {
+      const err = new Error(`SEC filing ${res.status}`);
+      err.status = res.status;
+      throw err;
+    }
+    const html = await res.text();
+    return {
+      summary: extractBusinessDescription(html),
+      filingDate: filing.filingDate,
+      source: `${filing.form} ${filing.filingDate || filing.accessionNumber}`,
+    };
+  });
+}
+
 function annualSecValues(companyfacts, tags, units) {
   const out = new Map();
   const facts = companyfacts?.facts?.['us-gaap'] || {};
@@ -221,7 +341,8 @@ function renderFundTable(data) {
     `${data.exchange || '--'} - ${data.industry || '--'}`,
     `${data.location || '--'} | ${data.phone || '--'}`,
     data.website || '--',
-    truncate(data.summary || data.name || '', 145) || '--',
+    `Company Description: ${truncate(data.summary || data.name || '', 700) || '--'}`,
+    data.summarySource ? `Description Source: ${data.summarySource}` : '',
     '',
     `Market Capitalization: ${moneyB(data.marketCap)}`,
     `Shares in Float:     ${sharesK(data.floatShares)}`,
@@ -229,7 +350,7 @@ function renderFundTable(data) {
     `Short Interest:      ${data.shortInterest || '--'}`,
     '',
     'Caveat: historical EPS is GAAP diluted EPS from SEC-style data; screenshot-style adjusted EPS needs a separate source.',
-    `Data as of: Yahoo chart ${data.asOf.yahooChart || 'n/a'}; SEC companyfacts ${data.asOf.secFacts || 'n/a'}; rendered ${data.asOf.rendered}`,
+    `Data as of: Yahoo chart ${data.asOf.yahooChart || 'n/a'}; SEC companyfacts ${data.asOf.secFacts || 'n/a'}; SEC profile ${data.asOf.secProfile || 'n/a'}; rendered ${data.asOf.rendered}`,
     data.warnings.length ? `Warnings: ${data.warnings.join('; ')}` : '',
     '',
     `${'Year'.padEnd(8)} ${'EPS'.padStart(8)} ${'% Chg'.padStart(7)} ${'Sales $B'.padStart(10)} ${'% Chg'.padStart(7)}  source`,
@@ -268,22 +389,33 @@ async function buildFundamentals(ticker, request, env, startYear) {
 
   const factsResult = await fetchCompanyfacts(cik, env);
   const facts = factsResult.data;
+  const submissionsResult = await fetchSubmissions(cik, env);
+  const submission = submissionsResult.data;
+  let descriptionResult = { data: { summary: '', filingDate: '' }, cache: 'none' };
+  try {
+    descriptionResult = await fetchBusinessDescription(cik, submission, env);
+  } catch (err) {
+    warnings.push(`SEC business description unavailable: ${err.message}`);
+  }
   const meta = chartMeta(chart);
   const shares = latestSecValue(facts, ['EntityCommonStockSharesOutstanding'], ['shares']);
   const price = cleanNumber(meta.regularMarketPrice);
   const sharesOutstanding = shares?.val ?? null;
   const marketCap = price != null && sharesOutstanding != null ? price * sharesOutstanding : null;
+  const industry = submission.sicDescription || '--';
+  const summary = descriptionResult.data.summary || submission.description || `${submission.name || facts.entityName || ticker} is an SEC filer in ${industry}.`;
 
   return {
     ticker,
     cik: String(cik).padStart(10, '0'),
-    name: meta.longName || meta.shortName || facts.entityName || ticker,
-    exchange: meta.fullExchangeName || meta.exchangeName || '--',
-    industry: '--',
-    location: '--',
-    phone: '--',
-    website: '--',
-    summary: facts.entityName || meta.longName || meta.shortName || ticker,
+    name: meta.longName || meta.shortName || submission.name || facts.entityName || ticker,
+    exchange: meta.fullExchangeName || meta.exchangeName || submission.exchanges?.[0] || '--',
+    industry,
+    location: locationFromSubmission(submission),
+    phone: submission.phone || '--',
+    website: submission.website || submission.investorWebsite || '--',
+    summary,
+    summarySource: descriptionResult.data.source || (submission.description ? 'SEC submissions' : 'SEC profile fallback'),
     price,
     marketCap,
     floatShares: null,
@@ -295,10 +427,13 @@ async function buildFundamentals(ticker, request, env, startYear) {
       cikMap: cikMapResult.cache,
       yahooChart: chartCache,
       secCompanyfacts: factsResult.cache,
+      secSubmissions: submissionsResult.cache,
+      secBusinessDescription: descriptionResult.cache,
     },
     asOf: {
       yahooChart: meta.regularMarketTime ? new Date(meta.regularMarketTime * 1000).toISOString() : null,
       secFacts: shares?.end || null,
+      secProfile: descriptionResult.data.filingDate || null,
       rendered: new Date().toISOString(),
     },
   };
@@ -314,7 +449,7 @@ export async function onRequestGet(context) {
 
   if (!ticker) return json({ error: 'ticker required' }, { status: 400 });
 
-  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v2`;
+  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v3`;
   const cached = await kvGet(env, renderKey);
   if (cached) {
     return format === 'json' ? json(JSON.parse(cached)) : text(cached);
