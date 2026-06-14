@@ -46,8 +46,11 @@ function moneyB(value) {
   return value == null ? '--' : `$${(value / 1_000_000_000).toFixed(1)} Bil`;
 }
 
-function sharesK(value) {
-  return value == null ? '--' : `${(value / 1_000_000).toFixed(1)}K`;
+function shares(value) {
+  if (value == null) return '--';
+  if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)} Bil`;
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)} Mil`;
+  return `${Math.round(value).toLocaleString()}`;
 }
 
 function pctChange(curr, prev, positiveBaseRequired = false) {
@@ -61,6 +64,23 @@ function truncate(value, maxLen) {
   const textValue = String(value || '').replace(/\s+/g, ' ').trim();
   if (textValue.length <= maxLen) return textValue;
   return `${textValue.slice(0, Math.max(0, maxLen - 3)).trim()}...`;
+}
+
+function wrapText(value, width = 76, indent = '') {
+  const words = String(value || '').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  const lines = [];
+  let line = '';
+  for (const word of words) {
+    const candidate = line ? `${line} ${word}` : word;
+    if (candidate.length > width && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = candidate;
+    }
+  }
+  if (line) lines.push(line);
+  return lines.map((item, idx) => `${idx ? indent : ''}${item}`);
 }
 
 function decodeHtml(value) {
@@ -336,24 +356,33 @@ function buildRows(companyfacts, startYear) {
 }
 
 function renderFundTable(data) {
+  const description = truncate(data.summary || data.name || '', 520) || '--';
+  const sourceBits = [
+    data.asOf.yahooChart ? `Yahoo ${data.asOf.yahooChart.slice(0, 10)}` : '',
+    data.asOf.secFacts ? `SEC facts ${data.asOf.secFacts}` : '',
+    data.summarySource ? `desc ${data.summarySource}` : '',
+  ].filter(Boolean);
   const lines = [
     `${data.ticker} Fundamentals`,
+    data.name && data.name !== data.ticker ? data.name : '',
     `${data.exchange || '--'} - ${data.industry || '--'}`,
     `${data.location || '--'} | ${data.phone || '--'}`,
-    data.website || '--',
-    `Company Description: ${truncate(data.summary || data.name || '', 700) || '--'}`,
-    data.summarySource ? `Description Source: ${data.summarySource}` : '',
+    data.website && data.website !== '--' ? data.website : '',
+    '',
+    'Description',
+    ...wrapText(description, 76),
     '',
     `Market Capitalization: ${moneyB(data.marketCap)}`,
-    `Shares in Float:     ${sharesK(data.floatShares)}`,
-    `Shares Outstanding:  ${sharesK(data.sharesOutstanding)}`,
+    `Shares in Float:     ${shares(data.floatShares)}`,
+    `Shares Outstanding:  ${shares(data.sharesOutstanding)}`,
     `Short Interest:      ${data.shortInterest || '--'}`,
     '',
-    'Caveat: historical EPS is GAAP diluted EPS from SEC-style data; screenshot-style adjusted EPS needs a separate source.',
-    `Data as of: Yahoo chart ${data.asOf.yahooChart || 'n/a'}; SEC companyfacts ${data.asOf.secFacts || 'n/a'}; SEC profile ${data.asOf.secProfile || 'n/a'}; rendered ${data.asOf.rendered}`,
+    sourceBits.length ? `Data: ${sourceBits.join('; ')}` : '',
+    'Note: EPS is GAAP diluted EPS from SEC data, not adjusted analyst EPS.',
     data.warnings.length ? `Warnings: ${data.warnings.join('; ')}` : '',
     '',
-    `${'Year'.padEnd(8)} ${'EPS'.padStart(8)} ${'% Chg'.padStart(7)} ${'Sales $B'.padStart(10)} ${'% Chg'.padStart(7)}  source`,
+    `${'Year'.padEnd(6)} ${'EPS'.padStart(8)} ${'EPS %'.padStart(7)} ${'Sales $B'.padStart(10)} ${'Sales %'.padStart(8)}`,
+    `${'-'.repeat(6)} ${'-'.repeat(8)} ${'-'.repeat(7)} ${'-'.repeat(10)} ${'-'.repeat(8)}`,
   ].filter((line, idx) => line || idx < 15);
 
   let prevEps = null;
@@ -361,9 +390,8 @@ function renderFundTable(data) {
   for (const row of data.rows) {
     const eps = row.eps == null ? '--' : row.eps.toFixed(2);
     const sales = row.salesB == null ? '--' : row.salesB.toFixed(2);
-    const source = [row.epsSource, row.salesSource].filter(Boolean).join('/') || '--';
     lines.push(
-      `${String(row.year).padEnd(8)} ${eps.padStart(8)} ${pctChange(row.eps, prevEps, true).padStart(7)} ${sales.padStart(10)} ${pctChange(row.salesB, prevSales).padStart(7)}  ${source}`
+      `${String(row.year).padEnd(6)} ${eps.padStart(8)} ${pctChange(row.eps, prevEps, true).padStart(7)} ${sales.padStart(10)} ${pctChange(row.salesB, prevSales).padStart(8)}`
     );
     if (row.eps != null) prevEps = row.eps;
     if (row.salesB != null) prevSales = row.salesB;
@@ -449,7 +477,7 @@ export async function onRequestGet(context) {
 
   if (!ticker) return json({ error: 'ticker required' }, { status: 400 });
 
-  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v3`;
+  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v4`;
   const cached = await kvGet(env, renderKey);
   if (cached) {
     return format === 'json' ? json(JSON.parse(cached)) : text(cached);
