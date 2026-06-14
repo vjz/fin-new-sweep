@@ -1,8 +1,12 @@
 (() => {
   const form = document.getElementById('fund-form');
   const input = document.getElementById('ticker');
+  const button = document.getElementById('load-button');
   const output = document.getElementById('output');
   const meta = document.getElementById('meta');
+  const fieldError = document.getElementById('field-error');
+  let activeRequest = null;
+  let loadedTicker = '';
 
   function cleanTicker(value) {
     return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9.-]/g, '').slice(0, 16);
@@ -43,6 +47,26 @@
 
   function firstDate(value) {
     return value ? String(value).slice(0, 10) : 'n/a';
+  }
+
+  function setBusy(isBusy) {
+    button.disabled = isBusy;
+    input.disabled = isBusy;
+    button.textContent = isBusy ? 'Loading' : 'Load';
+    input.setAttribute('aria-busy', String(isBusy));
+  }
+
+  function setFieldError(message = '') {
+    fieldError.textContent = message;
+  }
+
+  function urlForTicker(symbol) {
+    return `/fund/?ticker=${encodeURIComponent(symbol)}`;
+  }
+
+  function initialTicker() {
+    const params = new URLSearchParams(location.search);
+    return params.get('ticker') || input.value || 'WMT';
   }
 
   function renderFund(data) {
@@ -106,36 +130,79 @@
       ${warnings}`;
   }
 
-  async function load(ticker) {
+  async function load(ticker, { updateUrl = 'replace' } = {}) {
     const symbol = cleanTicker(ticker);
-    if (!symbol) return;
+    if (!symbol) {
+      setFieldError('Enter a ticker.');
+      input.focus();
+      return;
+    }
+    setFieldError('');
+    if (activeRequest) activeRequest.abort();
+    const controller = new AbortController();
+    activeRequest = controller;
     input.value = symbol;
     output.className = 'panel loading';
     output.textContent = `Loading ${symbol}...`;
     meta.textContent = 'Fetching cached fundamentals...';
-    const res = await fetch(`/api/fund/${encodeURIComponent(symbol)}?format=json`, { cache: 'no-store' });
-    const body = await res.json();
-    if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
-    renderFund(body);
-    meta.textContent = res.ok
-      ? `Endpoint: /api/fund/${symbol} | ${new Date().toLocaleString()}`
-      : `Request failed: HTTP ${res.status}`;
-    history.replaceState(null, '', `/fund/?ticker=${encodeURIComponent(symbol)}`);
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/fund/${encodeURIComponent(symbol)}?format=json`, {
+        cache: 'no-store',
+        signal: controller.signal,
+      });
+      const contentType = res.headers.get('content-type') || '';
+      const body = contentType.includes('application/json') ? await res.json() : {};
+      if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+      if (controller !== activeRequest) return;
+      renderFund(body);
+      loadedTicker = symbol;
+      meta.textContent = `Endpoint: /api/fund/${symbol} | ${new Date().toLocaleString()}`;
+      if (updateUrl === 'push') {
+        history.pushState({ ticker: symbol }, '', urlForTicker(symbol));
+      } else if (updateUrl === 'replace') {
+        history.replaceState({ ticker: symbol }, '', urlForTicker(symbol));
+      }
+    } finally {
+      if (controller === activeRequest) {
+        activeRequest = null;
+        setBusy(false);
+      }
+    }
   }
 
   form.addEventListener('submit', (event) => {
     event.preventDefault();
-    load(input.value).catch((err) => {
+    load(input.value, { updateUrl: cleanTicker(input.value) === loadedTicker ? 'replace' : 'push' }).catch((err) => {
+      if (err.name === 'AbortError') return;
       output.className = 'panel error';
       output.textContent = err.message || 'Request failed';
       meta.textContent = 'Unavailable';
+      setBusy(false);
     });
   });
 
-  const initial = new URLSearchParams(location.search).get('ticker') || input.value || 'WMT';
-  load(initial).catch((err) => {
+  input.addEventListener('input', () => {
+    const cleaned = cleanTicker(input.value);
+    if (input.value !== cleaned) input.value = cleaned;
+    if (cleaned) setFieldError('');
+  });
+
+  window.addEventListener('popstate', () => {
+    load(initialTicker(), { updateUrl: false }).catch((err) => {
+      if (err.name === 'AbortError') return;
+      output.className = 'panel error';
+      output.textContent = err.message || 'Request failed';
+      meta.textContent = 'Unavailable';
+      setBusy(false);
+    });
+  });
+
+  load(initialTicker(), { updateUrl: 'replace' }).catch((err) => {
+    if (err.name === 'AbortError') return;
     output.className = 'panel error';
     output.textContent = err.message || 'Request failed';
     meta.textContent = 'Unavailable';
+    setBusy(false);
   });
 })();
