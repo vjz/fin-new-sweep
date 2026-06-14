@@ -65,6 +65,11 @@
     return `${prefix}${Number(value).toFixed(digits)}%`;
   }
 
+  function fmtPrice(value) {
+    if (value == null) return '--';
+    return `$${Number(value).toFixed(value >= 100 ? 0 : 2)}`;
+  }
+
   function pctClass(value) {
     if (!value || value === '--' || value === 'NM') return '';
     return value.startsWith('-') ? ' class="neg"' : ' class="pos"';
@@ -91,6 +96,85 @@
           <td${pctClass(salesChange)}>${escapeHtml(salesChange)}</td>
         </tr>`;
     }).join('');
+  }
+
+  function linePath(points, key, xFor, yFor) {
+    let path = '';
+    let drawing = false;
+    points.forEach((point, index) => {
+      const value = point[key];
+      if (value == null) {
+        drawing = false;
+        return;
+      }
+      const cmd = drawing ? 'L' : 'M';
+      path += `${cmd}${xFor(index).toFixed(1)},${yFor(value).toFixed(1)} `;
+      drawing = true;
+    });
+    return path.trim();
+  }
+
+  function renderTechnicalChart(chart) {
+    if (!chart?.available || !chart.points?.length) return '';
+    const points = chart.points.filter((point) => point.close != null);
+    if (points.length < 2) return '';
+
+    const narrow = window.matchMedia?.('(max-width: 520px)')?.matches;
+    const width = narrow ? 360 : 820;
+    const height = narrow ? 220 : 230;
+    const pad = { top: 14, right: narrow ? 42 : 58, bottom: 28, left: 10 };
+    const values = points
+      .flatMap((point) => [point.close, point.ma50, point.ma200])
+      .filter((value) => value != null && Number.isFinite(value));
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const spread = max - min || max * 0.02 || 1;
+    const yMin = min - spread * 0.08;
+    const yMax = max + spread * 0.08;
+    const plotW = width - pad.left - pad.right;
+    const plotH = height - pad.top - pad.bottom;
+    const xFor = (index) => pad.left + (index / Math.max(1, points.length - 1)) * plotW;
+    const yFor = (value) => pad.top + ((yMax - value) / Math.max(1, yMax - yMin)) * plotH;
+    const gridValues = [yMin + (yMax - yMin) * 0.25, yMin + (yMax - yMin) * 0.5, yMin + (yMax - yMin) * 0.75];
+    const startLabel = points[0]?.date?.slice(5) || '';
+    const endLabel = points.at(-1)?.date?.slice(5) || '';
+    const latest = chart.latest || {};
+    const rel = fmtPct(latest.relativeReturn, { signed: true });
+    const relClass = latest.relativeReturn == null ? '' : latest.relativeReturn >= 0 ? ' good' : ' caution';
+
+    return `
+      <div class="section chart-section">
+        <div class="section-head">
+          <div>
+            <div class="section-title">Price Trend</div>
+            <div class="section-subtitle">6M daily close, 50D / 200D moving averages</div>
+          </div>
+          <div class="chart-price">${fmtPrice(latest.close)}</div>
+        </div>
+        <div class="chart-status">
+          <span class="status-chip${latest.above50d == null ? '' : latest.above50d ? ' good' : ' caution'}">${latest.above50d == null ? '50D n/a' : latest.above50d ? 'Above 50D' : 'Below 50D'}</span>
+          <span class="status-chip${latest.above200d == null ? '' : latest.above200d ? ' good' : ' caution'}">${latest.above200d == null ? '200D n/a' : latest.above200d ? 'Above 200D' : 'Below 200D'}</span>
+          <span class="status-chip${relClass}">RS vs SPY ${rel}</span>
+        </div>
+        <div class="chart-wrap" aria-label="6 month price chart">
+          <svg class="price-chart" viewBox="0 0 ${width} ${height}" role="img">
+            ${gridValues.map((value) => `
+              <line class="chart-grid" x1="${pad.left}" y1="${yFor(value).toFixed(1)}" x2="${width - pad.right}" y2="${yFor(value).toFixed(1)}"></line>
+              <text class="chart-axis" x="${width - pad.right + 8}" y="${(yFor(value) + 4).toFixed(1)}">${fmtPrice(value)}</text>
+            `).join('')}
+            <path class="chart-line ma200" d="${linePath(points, 'ma200', xFor, yFor)}"></path>
+            <path class="chart-line ma50" d="${linePath(points, 'ma50', xFor, yFor)}"></path>
+            <path class="chart-line close" d="${linePath(points, 'close', xFor, yFor)}"></path>
+            <text class="chart-date" x="${pad.left}" y="${height - 7}">${escapeHtml(startLabel)}</text>
+            <text class="chart-date end" x="${width - pad.right}" y="${height - 7}">${escapeHtml(endLabel)}</text>
+          </svg>
+        </div>
+        <div class="chart-legend">
+          <span><i class="legend-line close"></i>Price</span>
+          <span><i class="legend-line ma50"></i>50D</span>
+          <span><i class="legend-line ma200"></i>200D</span>
+        </div>
+      </div>`;
   }
 
   function setBusy(isBusy) {
@@ -133,6 +217,7 @@
     const quality = data.quality || {};
     const durval = data.durabilityValuation || {};
     const durvalRange = durval.available ? `${compactMoney(durval.rangeLow)}-${compactMoney(durval.rangeHigh)}` : '--';
+    const chartSection = renderTechnicalChart(data.technicalChart);
     const qualitySection = `
       <div class="section">
         <div class="section-head">
@@ -203,6 +288,8 @@
         <div class="metric"><div class="label">Float</div><div class="value">${shares(data.floatShares)}</div></div>
         <div class="metric"><div class="label">Short interest</div><div class="value">${escapeHtml(data.shortInterest || '--')}</div></div>
       </div>
+
+      ${chartSection}
 
       ${qualitySection}
 

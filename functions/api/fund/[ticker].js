@@ -424,6 +424,54 @@ function buildRelativeStrength(chart, benchmarkChart) {
   }));
 }
 
+function movingAverage(points, index, days) {
+  if (index + 1 < days) return null;
+  const slice = points.slice(index + 1 - days, index + 1);
+  if (slice.length !== days || slice.some((point) => point.close == null)) return null;
+  return slice.reduce((sum, point) => sum + point.close, 0) / days;
+}
+
+function buildTechnicalChart(chart, benchmarkChart) {
+  const stock = chartCloses(chart);
+  if (stock.length < 20) return { available: false, points: [] };
+
+  const benchmark = chartCloses(benchmarkChart);
+  const benchmarkByTs = new Map(benchmark.map((point) => [point.ts, point.close]));
+  const enriched = stock.map((point, index) => ({
+    date: new Date(point.ts * 1000).toISOString().slice(0, 10),
+    close: point.close,
+    ma50: movingAverage(stock, index, 50),
+    ma200: movingAverage(stock, index, 200),
+    benchmarkClose: benchmarkByTs.get(point.ts) ?? null,
+  }));
+  const points = enriched.slice(-126);
+  const latest = enriched.at(-1) || null;
+  const first = points[0] || null;
+  const benchmarkFirst = points.find((point) => point.benchmarkClose != null);
+  const benchmarkLast = [...points].reverse().find((point) => point.benchmarkClose != null);
+  const stockReturn = first?.close && latest?.close ? ((latest.close / first.close) - 1) * 100 : null;
+  const benchmarkReturn = benchmarkFirst?.benchmarkClose && benchmarkLast?.benchmarkClose
+    ? ((benchmarkLast.benchmarkClose / benchmarkFirst.benchmarkClose) - 1) * 100
+    : null;
+
+  return {
+    available: points.length >= 20,
+    range: '6M',
+    points: points.map(({ date, close, ma50, ma200 }) => ({ date, close, ma50, ma200 })),
+    latest: latest ? {
+      date: latest.date,
+      close: latest.close,
+      ma50: latest.ma50,
+      ma200: latest.ma200,
+      above50d: latest.ma50 == null ? null : latest.close >= latest.ma50,
+      above200d: latest.ma200 == null ? null : latest.close >= latest.ma200,
+      stockReturn,
+      benchmarkReturn,
+      relativeReturn: stockReturn == null || benchmarkReturn == null ? null : stockReturn - benchmarkReturn,
+    } : null,
+  };
+}
+
 function buildRows(companyfacts, startYear) {
   const revenue = annualSecValues(
     companyfacts,
@@ -769,6 +817,7 @@ async function buildFundamentals(ticker, request, env, startYear) {
     quality,
     durabilityValuation: buildDurabilityValuation(ticker, quality, quarterlyRows, rows, marketCap),
     relativeStrength: buildRelativeStrength(chart, benchmarkChart),
+    technicalChart: buildTechnicalChart(chart, benchmarkChart),
     warnings,
     cache: {
       cikMap: cikMapResult.cache,
@@ -797,7 +846,7 @@ export async function onRequestGet(context) {
 
   if (!ticker) return json({ error: 'ticker required' }, { status: 400 });
 
-  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v7`;
+  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v8`;
   const cached = await kvGet(env, renderKey);
   if (cached) {
     return format === 'json' ? json(JSON.parse(cached)) : text(cached);

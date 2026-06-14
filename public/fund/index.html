@@ -213,6 +213,108 @@
       grid-template-columns: repeat(6, minmax(0, 1fr));
       margin-bottom: 0;
     }
+    .chart-section {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #fbfcfa;
+    }
+    .chart-price {
+      font-size: 18px;
+      font-weight: 760;
+      white-space: nowrap;
+    }
+    .chart-status {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 0 8px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .status-chip.good {
+      border-color: rgba(20, 114, 79, 0.22);
+      background: #e9f5ef;
+      color: #14724f;
+    }
+    .status-chip.caution {
+      border-color: rgba(162, 58, 47, 0.20);
+      background: #f8ece9;
+      color: #a23a2f;
+    }
+    .chart-wrap {
+      width: 100%;
+      overflow: hidden;
+    }
+    .price-chart {
+      display: block;
+      width: 100%;
+      height: auto;
+      min-height: 190px;
+    }
+    .chart-grid {
+      stroke: #e2e6de;
+      stroke-width: 1;
+    }
+    .chart-line {
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .chart-line.close {
+      stroke: var(--accent);
+      stroke-width: 3;
+    }
+    .chart-line.ma50 {
+      stroke: #6d5bd0;
+      stroke-width: 1.8;
+    }
+    .chart-line.ma200 {
+      stroke: #c27820;
+      stroke-width: 1.8;
+    }
+    .chart-axis, .chart-date {
+      fill: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .chart-date.end {
+      text-anchor: end;
+    }
+    .chart-legend {
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .chart-legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .legend-line {
+      display: inline-block;
+      width: 18px;
+      height: 3px;
+      border-radius: 999px;
+      background: var(--accent);
+    }
+    .legend-line.ma50 { background: #6d5bd0; }
+    .legend-line.ma200 { background: #c27820; }
     .table-wrap {
       overflow-x: auto;
       border: 1px solid var(--line);
@@ -283,6 +385,11 @@
       .section { margin-top: 14px; }
       .section-head { display: block; }
       .section-subtitle { margin-top: 2px; }
+      .chart-section { padding: 9px; }
+      .chart-price { margin-top: 5px; font-size: 16px; }
+      .status-chip { font-size: 11px; min-height: 22px; padding: 0 7px; }
+      .price-chart { min-height: 170px; }
+      .chart-axis, .chart-date { font-size: 11px; }
       .table-wrap { overflow-x: visible; }
       table { min-width: 0; font-size: 13px; }
       th, td { padding: 8px 5px; }
