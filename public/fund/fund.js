@@ -49,6 +49,12 @@
     return `${change >= 0 ? '+' : ''}${change.toFixed(0)}%`;
   }
 
+  function fmtChangeValue(value) {
+    if (value == null) return '--';
+    if (value === 'NM') return 'NM';
+    return fmtPct(value, { signed: true });
+  }
+
   function fmtNumber(value, digits = 1) {
     return value == null ? '--' : Number(value).toFixed(digits);
   }
@@ -68,12 +74,12 @@
     return value ? String(value).slice(0, 10) : 'n/a';
   }
 
-  function trendRows(rows, firstLabel) {
+  function trendRows(rows, firstLabel, changeKeys = null) {
     let prevEps = null;
     let prevSales = null;
     return (rows || []).map((row) => {
-      const epsChange = pct(row.eps, prevEps, true);
-      const salesChange = pct(row.salesB, prevSales);
+      const epsChange = changeKeys ? fmtChangeValue(row[changeKeys.eps]) : pct(row.eps, prevEps, true);
+      const salesChange = changeKeys ? fmtChangeValue(row[changeKeys.sales]) : pct(row.salesB, prevSales);
       if (row.eps != null) prevEps = row.eps;
       if (row.salesB != null) prevSales = row.salesB;
       return `
@@ -109,7 +115,7 @@
 
   function renderFund(data) {
     const rows = trendRows(data.rows, 'year');
-    const quarterlyRows = trendRows(data.quarterlyRows, 'period');
+    const quarterlyRows = trendRows(data.quarterlyRows, 'period', { eps: 'epsYoY', sales: 'salesYoY' });
     const rsRows = (data.relativeStrength || []).map((row) => {
       const rel = fmtPct(row.relativeReturn, { signed: true });
       return `
@@ -146,12 +152,12 @@
       <div class="section">
         <div class="section-head">
           <div class="section-title">Quarterly EPS / Sales</div>
-          <div class="section-subtitle">SEC 10-Q facts</div>
+          <div class="section-subtitle">SEC 10-Q facts, YoY change</div>
         </div>
         <div class="table-wrap">
           <table>
             <thead>
-              <tr><th>Qtr</th><th>EPS</th><th>EPS %</th><th>Sales</th><th>Sales %</th></tr>
+              <tr><th>Qtr</th><th>EPS</th><th>EPS YoY</th><th>Sales</th><th>Sales YoY</th></tr>
             </thead>
             <tbody>${quarterlyRows}</tbody>
           </table>

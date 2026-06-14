@@ -94,6 +94,18 @@ function pctChange(curr, prev, positiveBaseRequired = false) {
   return `${pct >= 0 ? '+' : ''}${pct.toFixed(0)}%`;
 }
 
+function pctChangeValue(curr, prev, positiveBaseRequired = false) {
+  if (curr == null || prev == null || prev === 0) return null;
+  if (positiveBaseRequired && (prev <= 0 || curr < 0)) return 'NM';
+  return ((curr / prev) - 1) * 100;
+}
+
+function formatChangeValue(value) {
+  if (value == null) return '--';
+  if (value === 'NM') return 'NM';
+  return `${value >= 0 ? '+' : ''}${value.toFixed(0)}%`;
+}
+
 function formatNumber(value, digits = 1) {
   return value == null ? '--' : value.toFixed(digits);
 }
@@ -472,12 +484,15 @@ function buildQuarterlyRows(companyfacts, limit = 8) {
     ['USD/shares']
   );
   const keys = new Set([...revenue.keys(), ...eps.keys()]);
-  return [...keys]
+  const allRows = [...keys]
     .map((key) => {
       const revItem = revenue.get(key);
       const epsItem = eps.get(key);
       const [year, quarter] = key.split('-');
       return {
+        key,
+        year: Number(year),
+        quarter,
         period: `${quarter} ${year}`,
         sortKey: `${year}${quarter.slice(1)}`,
         end: revItem?.end || epsItem?.end || '',
@@ -487,8 +502,14 @@ function buildQuarterlyRows(companyfacts, limit = 8) {
         salesSource: revItem ? `SEC ${revItem.tag}` : '',
       };
     })
-    .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
-    .slice(-limit);
+    .sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+  const byKey = new Map(allRows.map((row) => [row.key, row]));
+  for (const row of allRows) {
+    const priorYearRow = byKey.get(`${row.year - 1}-${row.quarter}`);
+    row.epsYoY = pctChangeValue(row.eps, priorYearRow?.eps, true);
+    row.salesYoY = pctChangeValue(row.salesB, priorYearRow?.salesB);
+  }
+  return allRows.slice(-limit);
 }
 
 function latestAnnualValue(companyfacts, tags, units) {
@@ -660,17 +681,13 @@ function renderFundTable(data) {
   }
 
   if (data.quarterlyRows?.length) {
-    lines.push('', 'Quarterly', `${'Qtr'.padEnd(8)} ${'EPS'.padStart(8)} ${'EPS %'.padStart(7)} ${'Sales $B'.padStart(10)} ${'Sales %'.padStart(8)}`);
-    prevEps = null;
-    prevSales = null;
+    lines.push('', 'Quarterly', `${'Qtr'.padEnd(8)} ${'EPS'.padStart(8)} ${'EPS YoY'.padStart(7)} ${'Sales $B'.padStart(10)} ${'Sales YoY'.padStart(9)}`);
     for (const row of data.quarterlyRows) {
       const eps = row.eps == null ? '--' : row.eps.toFixed(2);
       const sales = row.salesB == null ? '--' : row.salesB.toFixed(2);
       lines.push(
-        `${String(row.period).padEnd(8)} ${eps.padStart(8)} ${pctChange(row.eps, prevEps, true).padStart(7)} ${sales.padStart(10)} ${pctChange(row.salesB, prevSales).padStart(8)}`
+        `${String(row.period).padEnd(8)} ${eps.padStart(8)} ${formatChangeValue(row.epsYoY).padStart(7)} ${sales.padStart(10)} ${formatChangeValue(row.salesYoY).padStart(9)}`
       );
-      if (row.eps != null) prevEps = row.eps;
-      if (row.salesB != null) prevSales = row.salesB;
     }
   }
 
@@ -780,7 +797,7 @@ export async function onRequestGet(context) {
 
   if (!ticker) return json({ error: 'ticker required' }, { status: 400 });
 
-  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v6`;
+  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v7`;
   const cached = await kvGet(env, renderKey);
   if (cached) {
     return format === 'json' ? json(JSON.parse(cached)) : text(cached);
