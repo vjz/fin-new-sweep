@@ -2,8 +2,8 @@ const SEC_UA = 'fin-new-sweep/1.0 dealzen.km@gmail.com';
 const YAHOO_UA = 'Mozilla/5.0 fin-new-sweep fund endpoint';
 
 const TTL = {
-  rendered: 6 * 60 * 60,
-  chart: 30 * 60,
+  rendered: 5 * 60,
+  chart: 5 * 60,
   cikMap: 30 * 24 * 60 * 60,
   companyfacts: 14 * 24 * 60 * 60,
   submissions: 14 * 24 * 60 * 60,
@@ -112,6 +112,10 @@ function formatNumber(value, digits = 1) {
 
 function formatPct(value) {
   return value == null ? '--' : `${value >= 0 ? '+' : ''}${value.toFixed(0)}%`;
+}
+
+function formatPrice(value) {
+  return value == null ? '--' : `$${value.toFixed(value >= 100 ? 2 : 2)}`;
 }
 
 function truncate(value, maxLen) {
@@ -424,6 +428,29 @@ function buildRelativeStrength(chart, benchmarkChart) {
   }));
 }
 
+function buildQuote(meta, chart) {
+  const closes = chartCloses(chart);
+  const latestClose = closes.at(-1)?.close ?? null;
+  const priorClose = closes.length > 1 ? closes.at(-2)?.close ?? null : null;
+  const price = cleanNumber(meta.regularMarketPrice);
+  const quotePrice = price ?? latestClose;
+  const previousClose = priorClose ?? cleanNumber(meta.previousClose ?? meta.chartPreviousClose);
+  const change = quotePrice == null || previousClose == null ? null : quotePrice - previousClose;
+  const changePct = change == null || previousClose === 0 ? null : (change / previousClose) * 100;
+  return {
+    price: quotePrice,
+    previousClose,
+    change,
+    changePct,
+    currency: meta.currency || '',
+    marketState: meta.marketState || '',
+    exchangeTimezoneName: meta.exchangeTimezoneName || '',
+    regularMarketTime: meta.regularMarketTime ? new Date(meta.regularMarketTime * 1000).toISOString() : null,
+    source: 'Yahoo chart metadata / daily close',
+    cacheTtlSeconds: TTL.chart,
+  };
+}
+
 function movingAverage(points, index, days) {
   if (index + 1 < days) return null;
   const slice = points.slice(index + 1 - days, index + 1);
@@ -693,6 +720,8 @@ function renderFundTable(data) {
     'Description',
     ...wrapText(description, 76),
     '',
+    `Latest Quote:         ${formatPrice(data.quote?.price)} ${data.quote?.change == null || data.quote?.changePct == null ? '' : `${data.quote.change >= 0 ? '+' : ''}${data.quote.change.toFixed(2)} (${data.quote.changePct >= 0 ? '+' : ''}${data.quote.changePct.toFixed(2)}%)`}`.trim(),
+    data.quote?.regularMarketTime ? `Quote Time:           ${data.quote.regularMarketTime}${data.quote.marketState ? ` ${data.quote.marketState}` : ''}` : '',
     `Market Capitalization: ${moneyB(data.marketCap)}`,
     `Shares in Float:     ${shares(data.floatShares)}`,
     `Shares Outstanding:  ${shares(data.sharesOutstanding)}`,
@@ -707,6 +736,7 @@ function renderFundTable(data) {
       : '',
     '',
     sourceBits.length ? `Data: ${sourceBits.join('; ')}` : '',
+    'Quote note: Yahoo chart metadata/daily close, cached up to 5 minutes; not guaranteed real-time.',
     'Note: EPS is GAAP diluted EPS from SEC data, not adjusted analyst EPS.',
     'Durval: durability-implied market cap from sales run rate, sales growth, gross margin, and quality/durability multipliers; scenario math, not a target price.',
     'Durval limits: can be wrong when margins, growth, cyclicality, or source data are stale or abnormal.',
@@ -808,6 +838,7 @@ async function buildFundamentals(ticker, request, env, startYear) {
     summary,
     summarySource: descriptionResult.data.source || (submission.description ? 'SEC submissions' : 'SEC profile fallback'),
     price,
+    quote: buildQuote(meta, chart),
     marketCap,
     floatShares: null,
     sharesOutstanding,
@@ -846,7 +877,7 @@ export async function onRequestGet(context) {
 
   if (!ticker) return json({ error: 'ticker required' }, { status: 400 });
 
-  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v8`;
+  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v9`;
   const cached = await kvGet(env, renderKey);
   if (cached) {
     return format === 'json' ? json(JSON.parse(cached)) : text(cached);

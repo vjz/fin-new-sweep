@@ -151,6 +151,34 @@
       border-radius: 6px;
       background: #fafbf8;
     }
+    .quote-strip {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfa;
+      padding: 10px 11px;
+      margin: 0 0 16px;
+    }
+    .quote-main {
+      font-size: 22px;
+      line-height: 1.1;
+      font-weight: 760;
+      margin-top: 3px;
+    }
+    .quote-change {
+      font-size: 14px;
+      font-weight: 750;
+      white-space: nowrap;
+    }
+    .quote-time {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+      text-align: right;
+    }
     .desc {
       font-size: 15px;
       line-height: 1.35;
@@ -375,6 +403,10 @@
       .badge { margin-top: 10px; }
       .profile { gap: 6px; margin-bottom: 12px; font-size: 12px; }
       .profile span { padding: 4px 6px; }
+      .quote-strip { display: block; padding: 9px; margin-bottom: 13px; }
+      .quote-main { font-size: 19px; }
+      .quote-change { display: block; margin-top: 3px; font-size: 12px; }
+      .quote-time { text-align: left; margin-top: 7px; }
       .desc { font-size: 14px; line-height: 1.32; margin-bottom: 13px; }
       .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin-bottom: 13px; }
       .quality { grid-template-columns: repeat(2, minmax(0, 1fr)); }
