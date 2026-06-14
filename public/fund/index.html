@@ -25,9 +25,9 @@
       line-height: 1.4;
     }
     .wrap {
-      width: min(1040px, calc(100% - 28px));
+      width: min(1040px, calc(100% - 24px));
       margin: 0 auto;
-      padding: 24px 0 42px;
+      padding: 20px 0 36px;
     }
     header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
     h1 { margin: 0; font-size: 28px; letter-spacing: 0; }
@@ -99,19 +99,20 @@
     }
     .desc {
       font-size: 15px;
-      margin: 0 0 18px;
+      line-height: 1.35;
+      margin: 0 0 16px;
       max-width: 78ch;
     }
     .metrics {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 10px;
-      margin-bottom: 18px;
+      gap: 8px;
+      margin-bottom: 16px;
     }
     .metric {
       border: 1px solid var(--line);
       border-radius: 8px;
-      padding: 11px 12px;
+      padding: 10px 11px;
       background: #fbfcfa;
       min-width: 0;
     }
@@ -136,6 +137,7 @@
       width: 100%;
       border-collapse: collapse;
       min-width: 560px;
+      table-layout: fixed;
       font-size: 14px;
     }
     th, td {
@@ -163,15 +165,29 @@
     }
     .error { color: #a23a2f; }
     @media (max-width: 720px) {
-      .wrap { width: min(100% - 20px, 1040px); padding-top: 16px; }
+      .wrap { width: min(100% - 16px, 1040px); padding-top: 12px; }
       header { align-items: flex-start; }
       h1 { font-size: 23px; }
-      .panel { padding: 14px; }
+      .panel { padding: 11px; }
       .topline { display: block; }
       .ticker { font-size: 30px; }
       .badge { margin-top: 10px; }
-      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .value { font-size: 17px; }
+      .profile { gap: 6px; margin-bottom: 12px; font-size: 12px; }
+      .profile span { padding: 4px 6px; }
+      .desc { font-size: 14px; line-height: 1.32; margin-bottom: 13px; }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin-bottom: 13px; }
+      .metric { padding: 8px 8px; }
+      .label { font-size: 10px; letter-spacing: 0.05em; }
+      .value { font-size: 16px; }
+      .table-wrap { overflow-x: visible; }
+      table { min-width: 0; font-size: 13px; }
+      th, td { padding: 8px 5px; }
+      th { font-size: 10px; letter-spacing: 0.03em; }
+      th:nth-child(1), td:nth-child(1) { width: 17%; }
+      th:nth-child(2), td:nth-child(2) { width: 18%; }
+      th:nth-child(3), td:nth-child(3) { width: 20%; }
+      th:nth-child(4), td:nth-child(4) { width: 24%; }
+      th:nth-child(5), td:nth-child(5) { width: 21%; }
       form { max-width: none; }
     }
   </style>

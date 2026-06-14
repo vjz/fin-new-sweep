@@ -95,14 +95,14 @@
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Year</th><th>EPS</th><th>EPS %</th><th>Sales $B</th><th>Sales %</th></tr>
+            <tr><th>Year</th><th>EPS</th><th>EPS %</th><th>Sales</th><th>Sales %</th></tr>
           </thead>
           <tbody>${rows}</tbody>
         </table>
       </div>
 
       <div class="note">Data: Yahoo ${firstDate(data.asOf?.yahooChart)}; SEC facts ${firstDate(data.asOf?.secFacts)}; description ${escapeHtml(data.summarySource || 'n/a')}</div>
-      <div class="note">EPS is GAAP diluted EPS from SEC data, not adjusted analyst EPS.</div>
+      <div class="note">Sales shown in $B. EPS is GAAP diluted EPS from SEC data, not adjusted analyst EPS.</div>
       ${warnings}`;
   }
 
