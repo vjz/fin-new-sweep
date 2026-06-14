@@ -60,6 +60,14 @@ function pctChange(curr, prev, positiveBaseRequired = false) {
   return `${pct >= 0 ? '+' : ''}${pct.toFixed(0)}%`;
 }
 
+function formatNumber(value, digits = 1) {
+  return value == null ? '--' : value.toFixed(digits);
+}
+
+function formatPct(value) {
+  return value == null ? '--' : `${value >= 0 ? '+' : ''}${value.toFixed(0)}%`;
+}
+
 function truncate(value, maxLen) {
   const textValue = String(value || '').replace(/\s+/g, ' ').trim();
   if (textValue.length <= maxLen) return textValue;
@@ -213,15 +221,15 @@ async function loadCikMap(request, env) {
   });
 }
 
-async function fetchChart(ticker, env) {
+async function fetchChart(ticker, env, range = '5d') {
   const block = await kvGet(env, 'yahoo:blocked_until');
   if (block && Number(block) > Date.now()) {
     throw new Error('Yahoo refresh deferred');
   }
 
   try {
-    return await cachedJson(env, `yahoo:chart:${ticker}:v1`, TTL.chart, async () => {
-      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=5d&interval=1d`;
+    return await cachedJson(env, `yahoo:chart:${ticker}:${range}:v1`, TTL.chart, async () => {
+      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=${encodeURIComponent(range)}&interval=1d`;
       return fetchJson(url, {
         headers: { accept: 'application/json', 'user-agent': YAHOO_UA },
         cf: { cacheTtl: TTL.chart, cacheEverything: true },
@@ -304,9 +312,9 @@ function annualSecValues(companyfacts, tags, units) {
   return out;
 }
 
-function latestSecValue(companyfacts, tags, units) {
-  let latest = null;
-  const facts = companyfacts?.facts?.dei || {};
+function secValues(companyfacts, namespace, tags, units) {
+  const out = [];
+  const facts = companyfacts?.facts?.[namespace] || {};
   for (const tag of tags) {
     const item = facts[tag];
     if (!item) continue;
@@ -314,16 +322,60 @@ function latestSecValue(companyfacts, tags, units) {
       for (const fact of item.units?.[unit] || []) {
         const val = cleanNumber(fact.val);
         if (val == null || !fact.end) continue;
-        const end = String(fact.end);
-        if (!latest || end > latest.end) latest = { end, val, tag };
+        out.push({ ...fact, val, tag, unit });
       }
     }
+  }
+  return out;
+}
+
+function latestSecValue(companyfacts, tags, units, namespace = 'dei') {
+  let latest = null;
+  for (const fact of secValues(companyfacts, namespace, tags, units)) {
+    const end = String(fact.end);
+    if (!latest || end > latest.end) latest = { end, val: fact.val, tag: fact.tag, form: fact.form, fp: fact.fp };
   }
   return latest;
 }
 
 function chartMeta(chart) {
   return chart?.chart?.result?.[0]?.meta || {};
+}
+
+function chartCloses(chart) {
+  const result = chart?.chart?.result?.[0];
+  const timestamps = result?.timestamp || [];
+  const closes = result?.indicators?.quote?.[0]?.close || [];
+  return timestamps
+    .map((ts, idx) => ({ ts, close: cleanNumber(closes[idx]) }))
+    .filter((point) => point.close != null)
+    .sort((a, b) => a.ts - b.ts);
+}
+
+function trailingReturn(points, days) {
+  if (!points.length) return null;
+  const last = points.at(-1);
+  const target = last.ts - days * 24 * 60 * 60;
+  let base = points[0];
+  for (const point of points) {
+    if (point.ts <= target) base = point;
+    else break;
+  }
+  if (!base?.close || !last?.close || base.close === 0 || base.ts === last.ts) return null;
+  return ((last.close / base.close) - 1) * 100;
+}
+
+function buildRelativeStrength(chart, benchmarkChart) {
+  const stock = chartCloses(chart);
+  const benchmark = chartCloses(benchmarkChart);
+  return [
+    { label: '3M', stockReturn: trailingReturn(stock, 63), benchmarkReturn: trailingReturn(benchmark, 63) },
+    { label: '6M', stockReturn: trailingReturn(stock, 126), benchmarkReturn: trailingReturn(benchmark, 126) },
+    { label: '12M', stockReturn: trailingReturn(stock, 252), benchmarkReturn: trailingReturn(benchmark, 252) },
+  ].map((row) => ({
+    ...row,
+    relativeReturn: row.stockReturn == null || row.benchmarkReturn == null ? null : row.stockReturn - row.benchmarkReturn,
+  }));
 }
 
 function buildRows(companyfacts, startYear) {
@@ -355,6 +407,111 @@ function buildRows(companyfacts, startYear) {
     });
 }
 
+function quarterlySecValues(companyfacts, tags, units) {
+  const out = new Map();
+  for (const fact of secValues(companyfacts, 'us-gaap', tags, units)) {
+    if (fact.form !== '10-Q') continue;
+    const frame = String(fact.frame || '');
+    const match = frame.match(/^CY(\d{4})Q([1-4])$/);
+    if (!match) continue;
+    const year = Number(match[1]);
+    const quarter = `Q${match[2]}`;
+    const key = `${year}-${quarter}`;
+    const filed = String(fact.filed || '');
+    const existing = out.get(key);
+    if (!existing || filed > existing.filed) {
+      out.set(key, { year, quarter, end: fact.end, filed, val: fact.val, tag: fact.tag });
+    }
+  }
+  return out;
+}
+
+function buildQuarterlyRows(companyfacts, limit = 8) {
+  const revenue = quarterlySecValues(
+    companyfacts,
+    ['Revenues', 'SalesRevenueNet', 'RevenueFromContractWithCustomerExcludingAssessedTax'],
+    ['USD']
+  );
+  const eps = quarterlySecValues(
+    companyfacts,
+    ['EarningsPerShareDiluted', 'EarningsPerShareBasicAndDiluted', 'EarningsPerShareBasic'],
+    ['USD/shares']
+  );
+  const keys = new Set([...revenue.keys(), ...eps.keys()]);
+  return [...keys]
+    .map((key) => {
+      const revItem = revenue.get(key);
+      const epsItem = eps.get(key);
+      const [year, quarter] = key.split('-');
+      return {
+        period: `${quarter} ${year}`,
+        sortKey: `${year}${quarter.slice(1)}`,
+        end: revItem?.end || epsItem?.end || '',
+        eps: epsItem?.val ?? null,
+        salesB: revItem?.val == null ? null : revItem.val / 1_000_000_000,
+        epsSource: epsItem ? `SEC ${epsItem.tag}` : '',
+        salesSource: revItem ? `SEC ${revItem.tag}` : '',
+      };
+    })
+    .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+    .slice(-limit);
+}
+
+function latestAnnualValue(companyfacts, tags, units) {
+  const values = annualSecValues(companyfacts, tags, units);
+  let latest = null;
+  for (const [year, item] of values.entries()) {
+    if (!latest || year > latest.year) latest = { year, ...item };
+  }
+  return latest;
+}
+
+function ratio(numerator, denominator, scale = 1) {
+  if (numerator == null || denominator == null || denominator === 0) return null;
+  return (numerator / denominator) * scale;
+}
+
+function buildQuality(companyfacts, marketCap, price) {
+  const revenue = latestAnnualValue(
+    companyfacts,
+    ['Revenues', 'SalesRevenueNet', 'RevenueFromContractWithCustomerExcludingAssessedTax'],
+    ['USD']
+  );
+  const grossProfit = latestAnnualValue(companyfacts, ['GrossProfit'], ['USD']);
+  const operatingIncome = latestAnnualValue(companyfacts, ['OperatingIncomeLoss'], ['USD']);
+  const pretaxIncome = latestAnnualValue(
+    companyfacts,
+    ['IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest', 'IncomeLossFromContinuingOperationsBeforeIncomeTaxes'],
+    ['USD']
+  );
+  const netIncome = latestAnnualValue(companyfacts, ['NetIncomeLoss', 'ProfitLoss'], ['USD']);
+  const annualEps = latestAnnualValue(
+    companyfacts,
+    ['EarningsPerShareDiluted', 'EarningsPerShareBasicAndDiluted', 'EarningsPerShareBasic'],
+    ['USD/shares']
+  );
+  const assets = latestSecValue(companyfacts, ['Assets'], ['USD'], 'us-gaap');
+  const liabilities = latestSecValue(companyfacts, ['Liabilities'], ['USD'], 'us-gaap');
+  const equity = latestSecValue(
+    companyfacts,
+    ['StockholdersEquity', 'StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest'],
+    ['USD'],
+    'us-gaap'
+  );
+
+  return {
+    fiscalYear: revenue?.year || netIncome?.year || annualEps?.year || null,
+    grossMargin: ratio(grossProfit?.val, revenue?.val, 100),
+    operatingMargin: ratio(operatingIncome?.val, revenue?.val, 100),
+    pretaxMargin: ratio(pretaxIncome?.val, revenue?.val, 100),
+    roe: ratio(netIncome?.val, equity?.val, 100),
+    liabilitiesToAssets: ratio(liabilities?.val ?? (assets?.val != null && equity?.val != null ? assets.val - equity.val : null), assets?.val, 100),
+    pe: price != null && annualEps?.val ? ratio(price, annualEps.val) : ratio(marketCap, netIncome?.val),
+    priceToSales: ratio(marketCap, revenue?.val),
+    dataDate: [revenue?.year, assets?.end, equity?.end].filter(Boolean).join(' / ') || '',
+  };
+}
+
 function renderFundTable(data) {
   const description = truncate(data.summary || data.name || '', 520) || '--';
   const sourceBits = [
@@ -376,6 +533,11 @@ function renderFundTable(data) {
     `Shares in Float:     ${shares(data.floatShares)}`,
     `Shares Outstanding:  ${shares(data.sharesOutstanding)}`,
     `Short Interest:      ${data.shortInterest || '--'}`,
+    `ROE:                 ${formatPct(data.quality?.roe)}`,
+    `Pretax Margin:       ${formatPct(data.quality?.pretaxMargin)}`,
+    `Liabilities/Assets:  ${formatPct(data.quality?.liabilitiesToAssets)}`,
+    `P/E:                 ${formatNumber(data.quality?.pe)}`,
+    `Price/Sales:         ${formatNumber(data.quality?.priceToSales)}`,
     '',
     sourceBits.length ? `Data: ${sourceBits.join('; ')}` : '',
     'Note: EPS is GAAP diluted EPS from SEC data, not adjusted analyst EPS.',
@@ -396,6 +558,30 @@ function renderFundTable(data) {
     if (row.eps != null) prevEps = row.eps;
     if (row.salesB != null) prevSales = row.salesB;
   }
+
+  if (data.quarterlyRows?.length) {
+    lines.push('', 'Quarterly', `${'Qtr'.padEnd(8)} ${'EPS'.padStart(8)} ${'EPS %'.padStart(7)} ${'Sales $B'.padStart(10)} ${'Sales %'.padStart(8)}`);
+    prevEps = null;
+    prevSales = null;
+    for (const row of data.quarterlyRows) {
+      const eps = row.eps == null ? '--' : row.eps.toFixed(2);
+      const sales = row.salesB == null ? '--' : row.salesB.toFixed(2);
+      lines.push(
+        `${String(row.period).padEnd(8)} ${eps.padStart(8)} ${pctChange(row.eps, prevEps, true).padStart(7)} ${sales.padStart(10)} ${pctChange(row.salesB, prevSales).padStart(8)}`
+      );
+      if (row.eps != null) prevEps = row.eps;
+      if (row.salesB != null) prevSales = row.salesB;
+    }
+  }
+
+  if (data.relativeStrength?.length) {
+    lines.push('', 'RS proxy vs SPY', `${'Period'.padEnd(8)} ${'Stock'.padStart(8)} ${'SPY'.padStart(8)} ${'Rel'.padStart(8)}`);
+    for (const row of data.relativeStrength) {
+      lines.push(
+        `${row.label.padEnd(8)} ${formatPct(row.stockReturn).padStart(8)} ${formatPct(row.benchmarkReturn).padStart(8)} ${formatPct(row.relativeReturn).padStart(8)}`
+      );
+    }
+  }
   return lines.join('\n');
 }
 
@@ -406,13 +592,22 @@ async function buildFundamentals(ticker, request, env, startYear) {
   if (!cik) throw new Error(`No SEC CIK mapping for ${ticker}`);
 
   let chart = null;
+  let benchmarkChart = null;
   let chartCache = 'none';
+  let benchmarkCache = 'none';
   try {
-    const chartResult = await fetchChart(ticker, env);
+    const chartResult = await fetchChart(ticker, env, '1y');
     chart = chartResult.data;
     chartCache = chartResult.cache;
   } catch (err) {
     warnings.push(`Yahoo chart unavailable: ${err.message}`);
+  }
+  try {
+    const benchmarkResult = await fetchChart('SPY', env, '1y');
+    benchmarkChart = benchmarkResult.data;
+    benchmarkCache = benchmarkResult.cache;
+  } catch (err) {
+    warnings.push(`SPY benchmark unavailable: ${err.message}`);
   }
 
   const factsResult = await fetchCompanyfacts(cik, env);
@@ -450,10 +645,14 @@ async function buildFundamentals(ticker, request, env, startYear) {
     sharesOutstanding,
     shortInterest: '--',
     rows: buildRows(facts, startYear),
+    quarterlyRows: buildQuarterlyRows(facts),
+    quality: buildQuality(facts, marketCap, price),
+    relativeStrength: buildRelativeStrength(chart, benchmarkChart),
     warnings,
     cache: {
       cikMap: cikMapResult.cache,
       yahooChart: chartCache,
+      benchmarkChart: benchmarkCache,
       secCompanyfacts: factsResult.cache,
       secSubmissions: submissionsResult.cache,
       secBusinessDescription: descriptionResult.cache,
@@ -477,7 +676,7 @@ export async function onRequestGet(context) {
 
   if (!ticker) return json({ error: 'ticker required' }, { status: 400 });
 
-  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v4`;
+  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v5`;
   const cached = await kvGet(env, renderKey);
   if (cached) {
     return format === 'json' ? json(JSON.parse(cached)) : text(cached);

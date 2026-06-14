@@ -182,6 +182,30 @@
       margin-top: 4px;
       overflow-wrap: anywhere;
     }
+    .section {
+      margin-top: 18px;
+    }
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .section-title {
+      font-size: 14px;
+      font-weight: 760;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .section-subtitle {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .quality {
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      margin-bottom: 0;
+    }
     .table-wrap {
       overflow-x: auto;
       border: 1px solid var(--line);
@@ -244,9 +268,13 @@
       .profile span { padding: 4px 6px; }
       .desc { font-size: 14px; line-height: 1.32; margin-bottom: 13px; }
       .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin-bottom: 13px; }
+      .quality { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .metric { padding: 8px 8px; }
       .label { font-size: 10px; letter-spacing: 0.05em; }
       .value { font-size: 16px; }
+      .section { margin-top: 14px; }
+      .section-head { display: block; }
+      .section-subtitle { margin-top: 2px; }
       .table-wrap { overflow-x: visible; }
       table { min-width: 0; font-size: 13px; }
       th, td { padding: 8px 5px; }
