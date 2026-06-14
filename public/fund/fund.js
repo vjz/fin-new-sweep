@@ -196,11 +196,10 @@
     const timestamp = fmtDateTime(quote.regularMarketTime);
     const marketState = quote.marketState ? ` · ${escapeHtml(quote.marketState)}` : '';
     return `
-      <div class="quote-strip">
-        <div>
-          <div class="label">Latest quote</div>
-          <div class="quote-main">${fmtPrice(quote.price)} <span class="quote-change${tone}">${escapeHtml(change)} (${escapeHtml(changePct)})</span></div>
-        </div>
+      <div class="quote-inline">
+        <div class="quote-label">Latest quote</div>
+        <div class="quote-main">${fmtPrice(quote.price)}</div>
+        <div class="quote-change${tone}">${escapeHtml(change)} (${escapeHtml(changePct)})</div>
         <div class="quote-time">${escapeHtml(timestamp)}${marketState}</div>
       </div>`;
   }
@@ -245,7 +244,7 @@
     const quality = data.quality || {};
     const durval = data.durabilityValuation || {};
     const durvalRange = durval.available ? `${compactMoney(durval.rangeLow)}-${compactMoney(durval.rangeHigh)}` : '--';
-    const quoteStrip = renderQuote(data.quote);
+    const quoteInline = renderQuote(data.quote);
     const chartSection = renderTechnicalChart(data.technicalChart);
     const qualitySection = `
       <div class="section">
@@ -300,7 +299,10 @@
           <div class="ticker">${escapeHtml(data.ticker)}</div>
           <div class="name">${escapeHtml(data.name || '')}</div>
         </div>
-        <div class="badge">${escapeHtml(data.cache?.secCompanyfacts === 'hit' ? 'Cached' : 'Fresh')}</div>
+        <div class="top-right">
+          <div class="badge">${escapeHtml(data.cache?.secCompanyfacts === 'hit' ? 'Cached' : 'Fresh')}</div>
+          ${quoteInline}
+        </div>
       </div>
 
       <div class="profile">
@@ -308,8 +310,6 @@
         <span>${escapeHtml(data.industry || '--')}</span>
         <span>${escapeHtml(data.location || '--')}</span>
       </div>
-
-      ${quoteStrip}
 
       <p class="desc">${escapeHtml(data.summary || '--')}</p>
 

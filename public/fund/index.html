@@ -116,7 +116,7 @@
       align-items: flex-start;
       justify-content: space-between;
       gap: 16px;
-      margin-bottom: 12px;
+      margin-bottom: 14px;
     }
     .ticker {
       font-size: 34px;
@@ -125,6 +125,14 @@
       line-height: 1;
     }
     .name { color: var(--muted); margin-top: 5px; }
+    .top-right {
+      display: flex;
+      align-items: flex-start;
+      justify-content: flex-end;
+      gap: 10px;
+      min-width: 260px;
+      text-align: right;
+    }
     .badge {
       display: inline-flex;
       align-items: center;
@@ -135,6 +143,40 @@
       color: var(--accent);
       font-size: 13px;
       font-weight: 700;
+      white-space: nowrap;
+    }
+    .quote-inline {
+      border-left: 1px solid var(--line);
+      padding-left: 12px;
+      min-width: 160px;
+    }
+    .quote-label {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1;
+      font-weight: 760;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .quote-main {
+      font-size: 26px;
+      line-height: 1;
+      font-weight: 780;
+      margin-top: 4px;
+    }
+    .quote-change {
+      font-size: 13px;
+      line-height: 1.15;
+      font-weight: 780;
+      margin-top: 4px;
+      white-space: nowrap;
+    }
+    .quote-time {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.2;
+      font-weight: 650;
+      margin-top: 4px;
       white-space: nowrap;
     }
     .profile {
@@ -150,34 +192,6 @@
       border: 1px solid var(--line);
       border-radius: 6px;
       background: #fafbf8;
-    }
-    .quote-strip {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 14px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #fbfcfa;
-      padding: 10px 11px;
-      margin: 0 0 16px;
-    }
-    .quote-main {
-      font-size: 22px;
-      line-height: 1.1;
-      font-weight: 760;
-      margin-top: 3px;
-    }
-    .quote-change {
-      font-size: 14px;
-      font-weight: 750;
-      white-space: nowrap;
-    }
-    .quote-time {
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 650;
-      text-align: right;
     }
     .desc {
       font-size: 15px;
@@ -398,15 +412,34 @@
         grid-row: 2;
       }
       .panel { padding: 11px; }
-      .topline { display: block; }
+      .topline {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+      }
       .ticker { font-size: 30px; }
-      .badge { margin-top: 10px; }
+      .top-right {
+        display: block;
+        min-width: 130px;
+        margin-left: auto;
+      }
+      .badge {
+        min-height: 24px;
+        padding: 0 8px;
+        font-size: 12px;
+        margin-bottom: 8px;
+      }
+      .quote-inline {
+        border-left: 0;
+        padding-left: 0;
+        min-width: 0;
+      }
+      .quote-label { font-size: 10px; }
+      .quote-main { font-size: 22px; }
+      .quote-change { font-size: 12px; white-space: normal; }
+      .quote-time { font-size: 10px; white-space: normal; }
       .profile { gap: 6px; margin-bottom: 12px; font-size: 12px; }
       .profile span { padding: 4px 6px; }
-      .quote-strip { display: block; padding: 9px; margin-bottom: 13px; }
-      .quote-main { font-size: 19px; }
-      .quote-change { display: block; margin-top: 3px; font-size: 12px; }
-      .quote-time { text-align: left; margin-top: 7px; }
       .desc { font-size: 14px; line-height: 1.32; margin-bottom: 13px; }
       .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin-bottom: 13px; }
       .quality { grid-template-columns: repeat(2, minmax(0, 1fr)); }
