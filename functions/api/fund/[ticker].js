@@ -575,7 +575,7 @@ function renderFundTable(data) {
   }
 
   if (data.relativeStrength?.length) {
-    lines.push('', 'RS proxy vs SPY', `${'Period'.padEnd(8)} ${'Stock'.padStart(8)} ${'SPY'.padStart(8)} ${'Rel'.padStart(8)}`);
+    lines.push('', 'Relative Strength vs SPY', `${'Period'.padEnd(8)} ${'Stock'.padStart(8)} ${'SPY'.padStart(8)} ${'Rel'.padStart(8)}`);
     for (const row of data.relativeStrength) {
       lines.push(
         `${row.label.padEnd(8)} ${formatPct(row.stockReturn).padStart(8)} ${formatPct(row.benchmarkReturn).padStart(8)} ${formatPct(row.relativeReturn).padStart(8)}`

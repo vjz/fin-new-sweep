@@ -149,8 +149,8 @@
     const rsSection = rsRows ? `
       <div class="section">
         <div class="section-head">
-          <div class="section-title">RS Proxy</div>
-          <div class="section-subtitle">Price return vs SPY, not official IBD RS</div>
+          <div class="section-title">Relative Strength</div>
+          <div class="section-subtitle">Price return vs SPY</div>
         </div>
         <div class="table-wrap">
           <table>
@@ -208,7 +208,7 @@
       ${rsSection}
 
       <div class="note">Data: Yahoo ${firstDate(data.asOf?.yahooChart)}; SEC facts ${firstDate(data.asOf?.secFacts)}; description ${escapeHtml(data.summarySource || 'n/a')}</div>
-      <div class="note">Sales shown in $B. EPS is GAAP diluted EPS from SEC data, not adjusted analyst EPS. RS proxy is raw price performance vs SPY.</div>
+      <div class="note">Sales shown in $B. EPS is GAAP diluted EPS from SEC data, not adjusted analyst EPS. Relative strength is raw price performance vs SPY.</div>
       ${warnings}`;
   }
 
