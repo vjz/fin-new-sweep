@@ -11,6 +11,31 @@ const TTL = {
   blocked: 15 * 60,
 };
 
+const QUALITY_DEFAULTS = {
+  NVDA: 1.30,
+  MRVL: 1.10,
+  MU: 1.00,
+  SNDK: 1.00,
+  DELL: 0.45,
+  SSNLF: 0.65,
+};
+
+const DURABILITY_DEFAULTS = {
+  NVDA: 1.25,
+  MU: 1.00,
+  MRVL: 1.00,
+  SNDK: 0.75,
+  DELL: 0.75,
+  SSNLF: 0.75,
+};
+
+const DURABILITY_CASES = [
+  { multiplier: 0.50, label: 'obvious peak cycle' },
+  { multiplier: 0.75, label: 'strong but cyclical' },
+  { multiplier: 1.00, label: 'durable 2-3 year setup' },
+  { multiplier: 1.25, label: 'structural scarcity' },
+];
+
 function json(data, init = {}) {
   return new Response(JSON.stringify(data, null, 2), {
     ...init,
@@ -44,6 +69,15 @@ function cleanNumber(value) {
 
 function moneyB(value) {
   return value == null ? '--' : `$${(value / 1_000_000_000).toFixed(1)} Bil`;
+}
+
+function compactMoney(value) {
+  if (value == null) return '--';
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000_000_000) return `$${(value / 1_000_000_000_000).toFixed(1)}T`;
+  if (abs >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(1)}B`;
+  if (abs >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
+  return `$${Math.round(value).toLocaleString()}`;
 }
 
 function shares(value) {
@@ -512,6 +546,67 @@ function buildQuality(companyfacts, marketCap, price) {
   };
 }
 
+function buildDurabilityValuation(ticker, quality, quarterlyRows, annualRows, marketCap) {
+  const latestQuarter = [...(quarterlyRows || [])].reverse().find((row) => row.salesB != null);
+  const priorYearQuarter = latestQuarter
+    ? [...(quarterlyRows || [])]
+      .filter((row) => row.salesB != null && row.period?.slice(0, 2) === latestQuarter.period?.slice(0, 2) && row.sortKey < latestQuarter.sortKey)
+      .at(-1)
+    : null;
+  const latestAnnual = [...(annualRows || [])].reverse().find((row) => row.salesB != null);
+  const priorAnnual = latestAnnual
+    ? [...(annualRows || [])].filter((row) => row.salesB != null && row.year < latestAnnual.year).at(-1)
+    : null;
+
+  const ttmSales = latestQuarter?.salesB != null
+    ? latestQuarter.salesB * 4 * 1_000_000_000
+    : latestAnnual?.salesB != null ? latestAnnual.salesB * 1_000_000_000 : null;
+  const salesGrowthPct = latestQuarter?.salesB != null && priorYearQuarter?.salesB
+    ? ((latestQuarter.salesB / priorYearQuarter.salesB) - 1) * 100
+    : latestAnnual?.salesB != null && priorAnnual?.salesB ? ((latestAnnual.salesB / priorAnnual.salesB) - 1) * 100 : null;
+  const grossMarginPct = quality?.grossMargin ?? null;
+  const qualityMultiplier = QUALITY_DEFAULTS[ticker] ?? 1.00;
+  const suggestedDurability = DURABILITY_DEFAULTS[ticker] ?? 0.75;
+
+  if (ttmSales == null || salesGrowthPct == null || grossMarginPct == null) {
+    return {
+      available: false,
+      missing: [
+        ttmSales == null ? 'ttmSales' : '',
+        salesGrowthPct == null ? 'salesGrowthPct' : '',
+        grossMarginPct == null ? 'grossMarginPct' : '',
+      ].filter(Boolean),
+    };
+  }
+
+  const base = ttmSales * 0.10 * (salesGrowthPct + grossMarginPct) * qualityMultiplier;
+  const valuations = DURABILITY_CASES.map((item) => {
+    const impliedMarketCap = base * item.multiplier;
+    return {
+      ...item,
+      impliedMarketCap,
+      upsideDownsidePct: ratio(impliedMarketCap - marketCap, marketCap, 100),
+    };
+  });
+  const impliedValues = valuations.map((item) => item.impliedMarketCap).filter((value) => value != null);
+  const suggested = valuations.find((item) => item.multiplier === suggestedDurability) || valuations[1];
+
+  return {
+    available: true,
+    ttmSales,
+    salesGrowthPct,
+    grossMarginPct,
+    qualityMultiplier,
+    suggestedDurability,
+    rangeLow: Math.min(...impliedValues),
+    rangeHigh: Math.max(...impliedValues),
+    suggestedValue: suggested?.impliedMarketCap ?? null,
+    suggestedUpsideDownsidePct: suggested?.upsideDownsidePct ?? null,
+    valuations,
+    source: latestQuarter?.salesB != null ? 'latest quarterly sales x4' : 'latest annual sales',
+  };
+}
+
 function renderFundTable(data) {
   const description = truncate(data.summary || data.name || '', 520) || '--';
   const sourceBits = [
@@ -538,6 +633,9 @@ function renderFundTable(data) {
     `Liabilities/Assets:  ${formatPct(data.quality?.liabilitiesToAssets)}`,
     `P/E:                 ${formatNumber(data.quality?.pe)}`,
     `Price/Sales:         ${formatNumber(data.quality?.priceToSales)}`,
+    data.durabilityValuation?.available
+      ? `Durval Range:        ${compactMoney(data.durabilityValuation.rangeLow)}-${compactMoney(data.durabilityValuation.rangeHigh)}`
+      : '',
     '',
     sourceBits.length ? `Data: ${sourceBits.join('; ')}` : '',
     'Note: EPS is GAAP diluted EPS from SEC data, not adjusted analyst EPS.',
@@ -627,6 +725,9 @@ async function buildFundamentals(ticker, request, env, startYear) {
   const marketCap = price != null && sharesOutstanding != null ? price * sharesOutstanding : null;
   const industry = submission.sicDescription || '--';
   const summary = descriptionResult.data.summary || submission.description || `${submission.name || facts.entityName || ticker} is an SEC filer in ${industry}.`;
+  const rows = buildRows(facts, startYear);
+  const quarterlyRows = buildQuarterlyRows(facts);
+  const quality = buildQuality(facts, marketCap, price);
 
   return {
     ticker,
@@ -644,9 +745,10 @@ async function buildFundamentals(ticker, request, env, startYear) {
     floatShares: null,
     sharesOutstanding,
     shortInterest: '--',
-    rows: buildRows(facts, startYear),
-    quarterlyRows: buildQuarterlyRows(facts),
-    quality: buildQuality(facts, marketCap, price),
+    rows,
+    quarterlyRows,
+    quality,
+    durabilityValuation: buildDurabilityValuation(ticker, quality, quarterlyRows, rows, marketCap),
     relativeStrength: buildRelativeStrength(chart, benchmarkChart),
     warnings,
     cache: {
@@ -676,7 +778,7 @@ export async function onRequestGet(context) {
 
   if (!ticker) return json({ error: 'ticker required' }, { status: 400 });
 
-  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v5`;
+  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v6`;
   const cached = await kvGet(env, renderKey);
   if (cached) {
     return format === 'json' ? json(JSON.parse(cached)) : text(cached);

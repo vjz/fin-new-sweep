@@ -26,6 +26,15 @@
     return value == null ? '--' : `$${(value / 1_000_000_000).toFixed(1)}B`;
   }
 
+  function compactMoney(value) {
+    if (value == null) return '--';
+    const abs = Math.abs(value);
+    if (abs >= 1_000_000_000_000) return `$${(value / 1_000_000_000_000).toFixed(1)}T`;
+    if (abs >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(1)}B`;
+    if (abs >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
+    return `$${Math.round(value).toLocaleString()}`;
+  }
+
   function shares(value) {
     if (value == null) return '--';
     if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`;
@@ -116,6 +125,8 @@
       ? `<div class="note warn">Warnings: ${escapeHtml(data.warnings.join('; '))}</div>`
       : '';
     const quality = data.quality || {};
+    const durval = data.durabilityValuation || {};
+    const durvalRange = durval.available ? `${compactMoney(durval.rangeLow)}-${compactMoney(durval.rangeHigh)}` : '--';
     const qualitySection = `
       <div class="section">
         <div class="section-head">
@@ -129,6 +140,7 @@
           <div class="metric"><div class="label">Liab/assets</div><div class="value">${fmtPct(quality.liabilitiesToAssets)}</div></div>
           <div class="metric"><div class="label">P/E</div><div class="value">${fmtNumber(quality.pe)}</div></div>
           <div class="metric"><div class="label">P/S</div><div class="value">${fmtNumber(quality.priceToSales)}</div></div>
+          <div class="metric"><div class="label">Durval</div><div class="value">${escapeHtml(durvalRange)}</div></div>
         </div>
       </div>`;
     const quarterlySection = quarterlyRows ? `
@@ -208,7 +220,7 @@
       ${rsSection}
 
       <div class="note">Data: Yahoo ${firstDate(data.asOf?.yahooChart)}; SEC facts ${firstDate(data.asOf?.secFacts)}; description ${escapeHtml(data.summarySource || 'n/a')}</div>
-      <div class="note">Sales shown in $B. EPS is GAAP diluted EPS from SEC data, not adjusted analyst EPS. Relative strength is raw price performance vs SPY.</div>
+      <div class="note">Sales shown in $B. EPS is GAAP diluted EPS from SEC data, not adjusted analyst EPS. Durval uses latest quarterly sales x4 when available. Relative strength is raw price performance vs SPY.</div>
       ${warnings}`;
   }
 
