@@ -639,6 +639,8 @@ function renderFundTable(data) {
     '',
     sourceBits.length ? `Data: ${sourceBits.join('; ')}` : '',
     'Note: EPS is GAAP diluted EPS from SEC data, not adjusted analyst EPS.',
+    'Durval: durability-implied market cap from sales run rate, sales growth, gross margin, and quality/durability multipliers; scenario math, not a target price.',
+    'Durval limits: can be wrong when margins, growth, cyclicality, or source data are stale or abnormal.',
     data.warnings.length ? `Warnings: ${data.warnings.join('; ')}` : '',
     '',
     `${'Year'.padEnd(6)} ${'EPS'.padStart(8)} ${'EPS %'.padStart(7)} ${'Sales $B'.padStart(10)} ${'Sales %'.padStart(8)}`,
