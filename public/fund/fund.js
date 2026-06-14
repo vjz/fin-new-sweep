@@ -70,6 +70,11 @@
     return `$${Number(value).toFixed(value >= 100 ? 0 : 2)}`;
   }
 
+  function fmtQuotePrice(value) {
+    if (value == null) return '--';
+    return `$${Number(value).toFixed(2)}`;
+  }
+
   function fmtDateTime(value) {
     if (!value) return 'n/a';
     return new Date(value).toLocaleString([], {
@@ -160,7 +165,7 @@
             <div class="section-title">Price Trend</div>
             <div class="section-subtitle">6M daily close, 50D / 200D moving averages</div>
           </div>
-          <div class="chart-price">${fmtPrice(latest.close)}</div>
+          <div class="chart-price">${fmtQuotePrice(latest.close)}</div>
         </div>
         <div class="chart-status">
           <span class="status-chip${latest.above50d == null ? '' : latest.above50d ? ' good' : ' caution'}">${latest.above50d == null ? '50D n/a' : latest.above50d ? 'Above 50D' : 'Below 50D'}</span>
@@ -198,7 +203,7 @@
     return `
       <div class="quote-inline">
         <div class="quote-label">Latest quote</div>
-        <div class="quote-main">${fmtPrice(quote.price)}</div>
+        <div class="quote-main">${fmtQuotePrice(quote.price)}</div>
         <div class="quote-change${tone}">${escapeHtml(change)} (${escapeHtml(changePct)})</div>
         <div class="quote-time">${escapeHtml(timestamp)}${marketState}</div>
       </div>`;
@@ -295,20 +300,19 @@
     output.className = 'panel';
     output.innerHTML = `
       <div class="topline">
-        <div>
+        <div class="identity">
           <div class="ticker">${escapeHtml(data.ticker)}</div>
           <div class="name">${escapeHtml(data.name || '')}</div>
+          <div class="profile">
+            <span>${escapeHtml(data.exchange || '--')}</span>
+            <span>${escapeHtml(data.industry || '--')}</span>
+            <span>${escapeHtml(data.location || '--')}</span>
+          </div>
         </div>
         <div class="top-right">
           <div class="badge">${escapeHtml(data.cache?.secCompanyfacts === 'hit' ? 'Cached' : 'Fresh')}</div>
           ${quoteInline}
         </div>
-      </div>
-
-      <div class="profile">
-        <span>${escapeHtml(data.exchange || '--')}</span>
-        <span>${escapeHtml(data.industry || '--')}</span>
-        <span>${escapeHtml(data.location || '--')}</span>
       </div>
 
       <p class="desc">${escapeHtml(data.summary || '--')}</p>
