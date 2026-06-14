@@ -140,7 +140,6 @@
           <div class="metric"><div class="label">Liab/assets</div><div class="value">${fmtPct(quality.liabilitiesToAssets)}</div></div>
           <div class="metric"><div class="label">P/E</div><div class="value">${fmtNumber(quality.pe)}</div></div>
           <div class="metric"><div class="label">P/S</div><div class="value">${fmtNumber(quality.priceToSales)}</div></div>
-          <div class="metric"><div class="label">Durval</div><div class="value">${escapeHtml(durvalRange)}</div></div>
         </div>
       </div>`;
     const quarterlySection = quarterlyRows ? `
@@ -193,7 +192,7 @@
       <p class="desc">${escapeHtml(data.summary || '--')}</p>
 
       <div class="metrics">
-        <div class="metric"><div class="label">Market cap</div><div class="value">${moneyB(data.marketCap)}</div></div>
+        <div class="metric"><div class="label">Market cap</div><div class="value">${moneyB(data.marketCap)}</div><div class="subvalue">Durval ${escapeHtml(durvalRange)}</div></div>
         <div class="metric"><div class="label">Shares out</div><div class="value">${shares(data.sharesOutstanding)}</div></div>
         <div class="metric"><div class="label">Float</div><div class="value">${shares(data.floatShares)}</div></div>
         <div class="metric"><div class="label">Short interest</div><div class="value">${escapeHtml(data.shortInterest || '--')}</div></div>
