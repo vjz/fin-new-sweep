@@ -165,7 +165,6 @@
             <div class="section-title">Price Trend</div>
             <div class="section-subtitle">6M daily close, 50D / 200D moving averages</div>
           </div>
-          <div class="chart-price">${fmtQuotePrice(latest.close)}</div>
         </div>
         <div class="chart-status">
           <span class="status-chip${latest.above50d == null ? '' : latest.above50d ? ' good' : ' caution'}">${latest.above50d == null ? '50D n/a' : latest.above50d ? 'Above 50D' : 'Below 50D'}</span>
