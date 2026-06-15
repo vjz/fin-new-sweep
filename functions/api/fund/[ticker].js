@@ -193,11 +193,25 @@ function latestAnnualFiling(submission) {
   return null;
 }
 
+function dropDescriptionBoilerplate(textValue) {
+  let value = String(textValue || '').replace(/\s+/g, ' ').trim();
+  const opening = value.slice(0, 2500);
+  if (/forward-looking statements|actual results and outcomes may differ materially|actual results may differ materially/i.test(opening)) {
+    value = value
+      .replace(/^.*?\bRisk Factors\.\s*/i, '')
+      .replace(/^As used herein,.*?context indicates otherwise\.\s*/i, '');
+    const heading = value.match(/\b(?:General|Overview|Business Overview|Our Company|Company Overview)\s+(?=(?:We|Our|The Company|Amazon\.com|[A-Z][a-z]+)\b)/i);
+    if (heading?.index != null && heading.index < 1200) value = value.slice(heading.index);
+  }
+  return value.replace(/^As used herein,.*?context indicates otherwise\.\s*/i, '').trim();
+}
+
 function trimBusinessDescription(segment) {
-  let textValue = segment
+  let textValue = dropDescriptionBoilerplate(segment)
     .replace(/^item\s+1\.?\s+business\s*/i, '')
     .replace(/^item\s+4\.?\s+information\s+on\s+the\s+company\s*/i, '')
     .replace(/^business\s+overview\s*/i, '')
+    .replace(/^company\s+overview\s*/i, '')
     .replace(/^industry\s+background\s*/i, '')
     .replace(/^(general|overview|our company)\s+/i, '')
     .replace(/\s+/g, ' ')
@@ -348,7 +362,7 @@ async function fetchBusinessDescription(cik, submission, env) {
   const filing = latestAnnualFiling(submission);
   if (!filing) return { data: { summary: '', filingDate: '' }, cache: 'none' };
 
-  return cachedJson(env, `sec:business-description:${cik}:${filing.accessionNumber}:v2`, TTL.businessDescription, async () => {
+  return cachedJson(env, `sec:business-description:${cik}:${filing.accessionNumber}:v3`, TTL.businessDescription, async () => {
     const accession = filing.accessionNumber.replace(/-/g, '');
     const url = `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${accession}/${filing.primaryDocument}`;
     const res = await fetch(url, {
@@ -944,7 +958,7 @@ export async function onRequestGet(context) {
 
   if (!ticker) return json({ error: 'ticker required' }, { status: 400 });
 
-  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v12`;
+  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v13`;
   const cached = await kvGet(env, renderKey);
   if (cached) {
     return format === 'json' ? json(JSON.parse(cached)) : text(cached);
