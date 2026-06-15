@@ -203,6 +203,62 @@
       margin: 0 0 16px;
       max-width: 78ch;
     }
+    .desc-block {
+      margin: 0 0 16px;
+      max-width: 78ch;
+    }
+    .desc-block summary {
+      display: block;
+      cursor: pointer;
+      font-size: 15px;
+      line-height: 1.35;
+    }
+    .desc-block summary::-webkit-details-marker {
+      display: none;
+    }
+    .desc-preview {
+      color: var(--ink);
+    }
+    .desc-toggle {
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 760;
+      white-space: nowrap;
+    }
+    .desc-toggle::before {
+      content: " More";
+    }
+    .desc-block[open] .desc-preview {
+      display: none;
+    }
+    .desc-block[open] .desc-toggle::before {
+      content: "";
+    }
+    .desc-full {
+      display: none;
+      margin-top: 0;
+      margin-bottom: 0;
+    }
+    .desc-block[open] .desc-full {
+      display: block;
+    }
+    .desc-close {
+      display: inline;
+      min-width: 0;
+      border: 0;
+      border-radius: 0;
+      padding: 0;
+      background: transparent;
+      color: var(--accent);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 760;
+      line-height: inherit;
+      white-space: nowrap;
+    }
+    .desc-close:hover {
+      text-decoration: underline;
+    }
     .metrics {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -440,7 +496,12 @@
       .quote-time { font-size: 10px; white-space: normal; }
       .profile { gap: 6px; margin-top: 10px; font-size: 12px; }
       .profile span { padding: 4px 6px; }
-      .desc { font-size: 14px; line-height: 1.32; margin-bottom: 13px; }
+      .desc,
+      .desc-block summary { font-size: 14px; line-height: 1.32; }
+      .desc,
+      .desc-block { margin-bottom: 13px; }
+      .desc-toggle,
+      .desc-close { font-size: 12px; }
       .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin-bottom: 13px; }
       .quality { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .metric { padding: 8px 8px; }
@@ -472,6 +533,15 @@
       .search,
       .field-error,
       .meta {
+        display: none;
+      }
+      .desc-block summary {
+        display: none;
+      }
+      .desc-block .desc-full {
+        display: block;
+      }
+      .desc-close {
         display: none;
       }
     }

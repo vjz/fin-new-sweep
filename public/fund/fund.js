@@ -95,6 +95,30 @@
     return value ? String(value).slice(0, 10) : 'n/a';
   }
 
+  function truncateWords(value, maxWords = 34) {
+    const text = String(value || '').replace(/\s+/g, ' ').trim();
+    if (!text) return '--';
+    const words = text.split(' ');
+    if (words.length <= maxWords) return text;
+    return `${words.slice(0, maxWords).join(' ')}...`;
+  }
+
+  function renderDescription(summary) {
+    const text = String(summary || '').replace(/\s+/g, ' ').trim();
+    if (!text) return '<p class="desc">--</p>';
+    const escaped = escapeHtml(text);
+    const preview = escapeHtml(truncateWords(text));
+    if (preview === escaped) return `<p class="desc">${escaped}</p>`;
+    return `
+      <details class="desc-block">
+        <summary>
+          <span class="desc-preview">${preview}</span>
+          <span class="desc-toggle" aria-hidden="true"></span>
+        </summary>
+        <p class="desc desc-full">${escaped} <button class="desc-close" type="button">Less</button></p>
+      </details>`;
+  }
+
   function trendRows(rows, firstLabel, changeKeys = null) {
     let prevEps = null;
     let prevSales = null;
@@ -250,6 +274,7 @@
     const durvalRange = durval.available ? `${compactMoney(durval.rangeLow)}-${compactMoney(durval.rangeHigh)}` : '--';
     const quoteInline = renderQuote(data.quote);
     const chartSection = renderTechnicalChart(data.technicalChart);
+    const description = renderDescription(data.summary);
     const qualitySection = `
       <div class="section">
         <div class="section-head">
@@ -314,7 +339,7 @@
         </div>
       </div>
 
-      <p class="desc">${escapeHtml(data.summary || '--')}</p>
+      ${description}
 
       <div class="metrics">
         <div class="metric"><div class="label">Market cap</div><div class="value">${moneyB(data.marketCap)}</div><div class="subvalue">Durval ${escapeHtml(durvalRange)}</div></div>
@@ -408,6 +433,13 @@
     const cleaned = cleanTicker(input.value);
     if (input.value !== cleaned) input.value = cleaned;
     if (cleaned) setFieldError('');
+  });
+
+  output.addEventListener('click', (event) => {
+    const close = event.target.closest('.desc-close');
+    if (!close) return;
+    const block = close.closest('.desc-block');
+    if (block) block.open = false;
   });
 
   window.addEventListener('popstate', () => {
