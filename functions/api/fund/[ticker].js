@@ -625,6 +625,42 @@ function latestAnnualValue(companyfacts, tags, units) {
   return latest;
 }
 
+function annualValueForYear(companyfacts, tags, units, year) {
+  if (year == null) return null;
+  const values = annualSecValues(companyfacts, tags, units);
+  const item = values.get(year);
+  return item ? { year, ...item } : null;
+}
+
+function buildAnnualGrossProfit(companyfacts, revenue) {
+  const grossProfit = latestAnnualValue(companyfacts, ['GrossProfit'], ['USD']);
+  if (grossProfit?.val != null) return { ...grossProfit, derived: false };
+
+  const costOfRevenue = annualValueForYear(
+    companyfacts,
+    [
+      'CostOfRevenue',
+      'CostOfGoodsAndServicesSold',
+      'CostOfGoodsSold',
+      'CostOfGoodsAndServiceExcludingDepreciationDepletionAndAmortization',
+      'CostOfGoodsAndServicesSoldOverhead',
+    ],
+    ['USD'],
+    revenue?.year
+  );
+  if (revenue?.val == null || costOfRevenue?.val == null) return null;
+  if (costOfRevenue.val < 0 || costOfRevenue.val > revenue.val) return null;
+
+  return {
+    year: revenue.year,
+    filed: costOfRevenue.filed,
+    val: revenue.val - costOfRevenue.val,
+    tag: `${revenue.tag}-minus-${costOfRevenue.tag}`,
+    form: costOfRevenue.form || revenue.form,
+    derived: true,
+  };
+}
+
 function ratio(numerator, denominator, scale = 1) {
   if (numerator == null || denominator == null || denominator === 0) return null;
   return (numerator / denominator) * scale;
@@ -636,7 +672,7 @@ function buildQuality(companyfacts, marketCap, price) {
     ['Revenues', 'SalesRevenueNet', 'RevenueFromContractWithCustomerExcludingAssessedTax'],
     ['USD']
   );
-  const grossProfit = latestAnnualValue(companyfacts, ['GrossProfit'], ['USD']);
+  const grossProfit = buildAnnualGrossProfit(companyfacts, revenue);
   const operatingIncome = latestAnnualValue(companyfacts, ['OperatingIncomeLoss'], ['USD']);
   const pretaxIncome = latestAnnualValue(
     companyfacts,
@@ -668,6 +704,7 @@ function buildQuality(companyfacts, marketCap, price) {
     pe: price != null && annualEps?.val ? ratio(price, annualEps.val) : ratio(marketCap, netIncome?.val),
     priceToSales: ratio(marketCap, revenue?.val),
     dataDate: [revenue?.year, assets?.end, equity?.end].filter(Boolean).join(' / ') || '',
+    grossMarginSource: grossProfit?.derived ? `derived from ${grossProfit.tag}` : grossProfit?.tag || '',
   };
 }
 
@@ -907,7 +944,7 @@ export async function onRequestGet(context) {
 
   if (!ticker) return json({ error: 'ticker required' }, { status: 400 });
 
-  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v11`;
+  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v12`;
   const cached = await kvGet(env, renderKey);
   if (cached) {
     return format === 'json' ? json(JSON.parse(cached)) : text(cached);
