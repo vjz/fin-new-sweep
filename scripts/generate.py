@@ -27,9 +27,10 @@ INBOX = os.path.join(ROOT, "store/news-sweep/inbox.json")
 NEWS_SWEEP_CLI = os.path.join(ROOT, "scripts/news_sweep_cli.py")
 
 SITE_TITLE = os.getenv("FIN_NEWS_SWEEP_TITLE", "Finance News Sweep")
-BASE_URL = os.getenv("FIN_NEWS_SWEEP_BASE_URL", "").rstrip("/")
+BASE_URL = os.getenv("FIN_NEWS_SWEEP_BASE_URL", "https://fin-new-sweep.pages.dev").rstrip("/")
 TOP_N = int(os.getenv("FIN_NEWS_SWEEP_TOP_N", "20"))
 NEW_HOURS = float(os.getenv("FIN_NEWS_SWEEP_NEW_HOURS", "6"))
+ASSET_VERSION = "20260615-0716"
 
 # Mark paywalled domains (keep links, but label).
 PAYWALLED = {
@@ -287,19 +288,15 @@ def html_page(*, generated_at: str, summary_text: str, items: list[dict], now_ut
   <meta name="twitter:title" content="{esc(meta_title)}" />
   <meta name="twitter:description" content="{esc(meta_desc)}" />
   {f'<link rel="canonical" href="{esc(og_url)}" />' if og_url else ''}
+  <link rel="stylesheet" href="/app.css?v={ASSET_VERSION}" />
   <style>
-    :root {{ color-scheme: light dark; }}
-    body {{ font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; margin: 24px; max-width: 980px; }}
-    h1 {{ margin: 0 0 8px 0; }}
     .meta {{ opacity: 0.8; margin-bottom: 16px; }}
     .grid {{ display: grid; grid-template-columns: 1fr; gap: 18px; }}
     @media (min-width: 900px) {{ .grid {{ grid-template-columns: 1fr 1fr; }} }}
-    .card {{ border: 1px solid rgba(127,127,127,0.35); border-radius: 12px; padding: 14px 16px; }}
+    .card {{ padding: 14px 16px; }}
     ul {{ margin: 0; padding-left: 18px; }}
     li {{ margin: 8px 0; }}
     .tight li {{ margin: 6px 0; }}
-    a {{ text-decoration: none; }}
-    a:hover {{ text-decoration: underline; }}
     .src {{ margin-left: 6px; opacity: 0.8; font-size: 12px; }}
     .pill {{ display: inline-block; margin-left: 8px; font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(127,127,127,0.35); opacity: 0.85; }}
     .pill.new {{ border-color: rgba(60,180,90,0.6); }}
@@ -309,11 +306,28 @@ def html_page(*, generated_at: str, summary_text: str, items: list[dict], now_ut
   </style>
 </head>
 <body>
-  <h1>{esc(SITE_TITLE)}</h1>
+  <main class="app-shell">
+  <header class="app-header">
+    <div class="brand">
+      <a class="brand-title" href="/">{esc(SITE_TITLE)}</a>
+      <div class="brand-subtitle">Market pulse, storylines, and single-ticker dashboards</div>
+    </div>
+    <form class="search" data-ticker-nav>
+      <div class="search-field">
+        <input name="ticker" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Ticker" placeholder="Ticker" />
+      </div>
+      <button type="submit">Load</button>
+    </form>
+    <nav class="app-nav" aria-label="Primary">
+      <a class="active" href="/">News</a>
+      <a href="/fund/">Ticker</a>
+    </nav>
+  </header>
+
   <div class=\"meta\">Updated {esc(generated_at)}</div>
 
   <div class=\"card\" style=\"margin-bottom:16px\">
-    <div style=\"font-size:14px; font-weight:600; margin-bottom:2px;\">Cross-Asset Dashboard</div>
+    <div style=\"font-size:14px; font-weight:600; margin-bottom:2px;\">Market Pulse</div>
     <div id=\"dashboard-time\" style=\"font-size:12px; opacity:0.75; margin-bottom:6px;\">Loading live Yahoo Finance data…</div>
     <div id=\"dashboard-lines\" style=\"font-size:13px; line-height:1.5;\">(loading)</div>
     <div id=\"dashboard-regime\" style=\"margin-top:6px; font-size:13px; font-weight:600;\">Regime: —</div>
@@ -333,6 +347,8 @@ def html_page(*, generated_at: str, summary_text: str, items: list[dict], now_ut
       </ul>
     </div>
   </div>
+  </main>
+  <script src="/app.js?v={ASSET_VERSION}" defer></script>
   <script src="dashboard.js?v=20260512-0110" defer></script>
 </body>
 </html>"""
@@ -378,6 +394,7 @@ def main() -> int:
             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
             "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n"
             f"  <url>\n    <loc>{BASE_URL}/</loc>\n    <lastmod>{now_utc.date().isoformat()}</lastmod>\n  </url>\n"
+            f"  <url>\n    <loc>{BASE_URL}/fund/</loc>\n    <lastmod>{now_utc.date().isoformat()}</lastmod>\n  </url>\n"
             "</urlset>\n"
         )
     else:

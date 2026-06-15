@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Fundamentals — Finance News Sweep</title>
   <meta name="description" content="SEC-backed fundamentals table with cached Cloudflare Pages endpoint." />
+  <link rel="stylesheet" href="/app.css?v=20260615-0716" />
   <style>
     :root {
       color-scheme: light;
@@ -39,6 +40,10 @@
     h1 { margin: 0; font-size: 28px; letter-spacing: 0; line-height: 1.08; }
     a { color: inherit; opacity: 0.8; text-decoration: none; }
     a:hover { text-decoration: underline; }
+    .brand-title,
+    .app-nav a.active {
+      opacity: 1;
+    }
     .search {
       display: flex;
       gap: 6px;
@@ -629,15 +634,21 @@
 </head>
 <body>
   <main class="wrap">
-    <header>
-      <h1>Fundamentals</h1>
+    <header class="app-header">
+      <div class="brand">
+        <a class="brand-title" href="/">Finance News Sweep</a>
+        <div class="brand-subtitle">Single-ticker dashboard</div>
+      </div>
       <form id="fund-form" class="search">
         <div class="search-field">
           <input id="ticker" name="ticker" autocomplete="off" autocapitalize="characters" spellcheck="false" value="WMT" aria-label="Ticker" placeholder="Ticker" />
         </div>
         <button id="load-button" type="submit">Load</button>
       </form>
-      <a href="/">News Sweep</a>
+      <nav class="app-nav" aria-label="Primary">
+        <a href="/">News</a>
+        <a class="active" href="/fund/">Ticker</a>
+      </nav>
     </header>
 
     <div id="field-error" class="field-error" role="status" aria-live="polite"></div>
