@@ -26,7 +26,7 @@ ROOT = "/home/vjshrike/clawd"
 INBOX = os.path.join(ROOT, "store/news-sweep/inbox.json")
 NEWS_SWEEP_CLI = os.path.join(ROOT, "scripts/news_sweep_cli.py")
 
-SITE_TITLE = os.getenv("FIN_NEWS_SWEEP_TITLE", "Finance News Sweep")
+SITE_TITLE = os.getenv("FIN_NEWS_SWEEP_TITLE", "Market Sweep")
 BASE_URL = os.getenv("FIN_NEWS_SWEEP_BASE_URL", "https://fin-new-sweep.pages.dev").rstrip("/")
 TOP_N = int(os.getenv("FIN_NEWS_SWEEP_TOP_N", "20"))
 NEW_HOURS = float(os.getenv("FIN_NEWS_SWEEP_NEW_HOURS", "6"))
@@ -174,7 +174,7 @@ EARNINGS_TERMS = re.compile(
 def is_earnings_text(text: str) -> bool:
     """Return True for earnings/results-related buckets and headlines.
 
-    Finance News Sweep intentionally excludes earnings-specific features; this
+    Market Sweep intentionally excludes earnings-specific features; this
     keeps generic RSS pulls from reintroducing an Earnings/Results section.
     """
     return bool(EARNINGS_TERMS.search(text or ""))

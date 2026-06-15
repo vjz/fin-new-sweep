@@ -1,5 +1,5 @@
 # fin-new-sweep
-Finance News Sweep
+Market Sweep
 
 ## Fund endpoint
 
