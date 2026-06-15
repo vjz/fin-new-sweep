@@ -70,9 +70,9 @@
     return `$${Number(value).toFixed(value >= 100 ? 0 : 2)}`;
   }
 
-  function fmtQuotePrice(value) {
+  function fmtQuoteNumber(value) {
     if (value == null) return '--';
-    return `$${Number(value).toFixed(2)}`;
+    return Number(value).toFixed(2);
   }
 
   function fmtDateTime(value) {
@@ -226,7 +226,7 @@
     return `
       <div class="quote-inline">
         <div class="quote-label">Latest quote</div>
-        <div class="quote-main">${fmtQuotePrice(quote.price)}</div>
+        <div class="quote-main">${fmtQuoteNumber(quote.price)}</div>
         <div class="quote-change${tone}">${escapeHtml(change)} (${escapeHtml(changePct)})</div>
         <div class="quote-time">${escapeHtml(timestamp)}${marketState}</div>
       </div>`;
