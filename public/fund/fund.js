@@ -355,11 +355,12 @@
     const chartSection = renderTechnicalChart(data.technicalChart);
     const optionsSection = renderOptionsCard(data.ticker);
     const description = renderDescription(data.summary);
+    const secForms = data.asOf?.secFactForms || '10-K / 10-Q';
     const qualitySection = `
       <div class="section">
         <div class="section-head">
           <div class="section-title">Quality Snapshot</div>
-          <div class="section-subtitle">${quality.fiscalYear ? `FY ${escapeHtml(quality.fiscalYear)}` : 'Latest SEC facts'}</div>
+          <div class="section-subtitle">${quality.fiscalYear ? `FY ${escapeHtml(quality.fiscalYear)}` : 'Latest SEC facts'} · SEC ${escapeHtml(secForms)}</div>
         </div>
         <div class="metrics quality">
           <div class="metric"><div class="label">ROE</div><div class="value">${fmtPct(quality.roe)}</div></div>
@@ -374,7 +375,7 @@
       <div class="section">
         <div class="section-head">
           <div class="section-title">Quarterly EPS / Sales</div>
-          <div class="section-subtitle">SEC 10-Q facts, YoY change</div>
+          <div class="section-subtitle">SEC ${escapeHtml(secForms)} facts, YoY change</div>
         </div>
         <div class="table-wrap">
           <table>
@@ -436,7 +437,7 @@
       <div class="section">
         <div class="section-head">
           <div class="section-title">Annual EPS / Sales</div>
-          <div class="section-subtitle">SEC 10-K facts</div>
+          <div class="section-subtitle">SEC ${escapeHtml(secForms)} facts</div>
         </div>
         <div class="table-wrap">
           <table>
@@ -451,7 +452,7 @@
       ${quarterlySection}
       ${rsSection}
 
-      <div class="note">Data: Yahoo quote/chart ${firstDate(data.asOf?.yahooChart)}; SEC facts ${firstDate(data.asOf?.secFacts)}; description ${escapeHtml(data.summarySource || 'n/a')}</div>
+      <div class="note">Data: Yahoo quote/chart ${firstDate(data.asOf?.yahooChart)}; SEC ${escapeHtml(secForms)} facts ${firstDate(data.asOf?.secFacts)}; description ${escapeHtml(data.summarySource || 'n/a')}</div>
       <div class="note">Latest quote uses Yahoo chart metadata/daily close and is cached up to 5 minutes; it is not guaranteed real-time.</div>
       <div class="note">Sales shown in $B. EPS is GAAP diluted EPS from SEC data, not adjusted analyst EPS. Relative strength is raw price performance vs SPY.</div>
       <div class="note">Durval estimates durability-implied market cap from sales run rate, sales growth, gross margin, and a quality/durability multiplier. It is scenario math, not a target price; it can be wrong when margins, growth, cyclicality, or source data are stale or abnormal.</div>

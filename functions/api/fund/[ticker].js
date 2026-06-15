@@ -36,6 +36,9 @@ const DURABILITY_CASES = [
   { multiplier: 1.25, label: 'structural scarcity' },
 ];
 
+const ANNUAL_FORMS = new Set(['10-K', '20-F']);
+const INTERIM_FORMS = new Set(['10-Q', '6-K']);
+
 function json(data, init = {}) {
   return new Response(JSON.stringify(data, null, 2), {
     ...init,
@@ -178,7 +181,7 @@ function latestAnnualFiling(submission) {
   const recent = submission?.filings?.recent || {};
   const forms = recent.form || [];
   for (let i = 0; i < forms.length; i += 1) {
-    if (forms[i] !== '10-K') continue;
+    if (!ANNUAL_FORMS.has(forms[i])) continue;
     if (!recent.accessionNumber?.[i] || !recent.primaryDocument?.[i]) continue;
     return {
       form: forms[i],
@@ -193,6 +196,9 @@ function latestAnnualFiling(submission) {
 function trimBusinessDescription(segment) {
   let textValue = segment
     .replace(/^item\s+1\.?\s+business\s*/i, '')
+    .replace(/^item\s+4\.?\s+information\s+on\s+the\s+company\s*/i, '')
+    .replace(/^business\s+overview\s*/i, '')
+    .replace(/^industry\s+background\s*/i, '')
     .replace(/^(general|overview|our company)\s+/i, '')
     .replace(/\s+/g, ' ')
     .trim();
@@ -206,16 +212,39 @@ function trimBusinessDescription(segment) {
 
 function extractBusinessDescription(html) {
   const textValue = cleanHtmlText(html);
-  const starts = [...textValue.matchAll(/item\s+1\.?\s+business/gi)].map((match) => match.index);
-  const ends = [...textValue.matchAll(/item\s+1a\.?\s+risk\s+factors/gi)].map((match) => match.index);
+  const overviewStarts = [...textValue.matchAll(/business\s+overview(?:\s+industry\s+background)?/gi)]
+    .map((match) => match.index)
+    .filter((idx) => {
+      const snippet = textValue.slice(idx, idx + 240);
+      return !/legal\s+proceedings|research\s+and\s+development|intellectual\s+property|item\s+5/i.test(snippet);
+    });
+  const starts = [
+    ...overviewStarts.map((idx) => ({ idx, preferred: true })),
+    ...[...textValue.matchAll(/item\s+1\.?\s+business/gi)].map((match) => match.index),
+    ...[...textValue.matchAll(/item\s+4\.?\s+information\s+on\s+the\s+company/gi)].map((match) => match.index),
+  ]
+    .map((entry) => (typeof entry === 'number' ? { idx: entry, preferred: false } : entry))
+    .sort((a, b) => {
+      if (a.preferred !== b.preferred) return a.preferred ? -1 : 1;
+      return a.idx - b.idx;
+    });
+  const ends = [
+    ...[...textValue.matchAll(/research\s+and\s+development/gi)].map((match) => match.index),
+    ...[...textValue.matchAll(/intellectual\s+property/gi)].map((match) => match.index),
+    ...[...textValue.matchAll(/item\s+1a\.?\s+risk\s+factors/gi)].map((match) => match.index),
+    ...[...textValue.matchAll(/item\s+4a\.?\s+unresolved\s+staff\s+comments/gi)].map((match) => match.index),
+    ...[...textValue.matchAll(/item\s+5\.?\s+operating\s+and\s+financial\s+review/gi)].map((match) => match.index),
+  ].sort((a, b) => a - b);
   const candidates = [];
 
   for (const start of starts) {
-    const end = ends.find((idx) => idx > start) || Math.min(textValue.length, start + 100000);
-    const segment = textValue.slice(start, end);
+    const end = ends.find((idx) => idx > start.idx) || Math.min(textValue.length, start.idx + 100000);
+    const segment = textValue.slice(start.idx, end);
     if (segment.length < 1200 || segment.length > 120000) continue;
     if (/item\s+1\.?\s+business\s*["'.]*\s*\d+\s+item\s+3/i.test(segment.slice(0, 180))) continue;
     if (/item\s+1\.?\s+business\s*["'.]*\s+above contains/i.test(segment.slice(0, 180))) continue;
+    if (/item\s+4\.?\s+information\s+on\s+the\s+company\s+\d+\s+item\s+4a/i.test(segment.slice(0, 180))) continue;
+    if (/companies\s+act|legal\s+proceedings/i.test(segment.slice(0, 240))) continue;
     candidates.push(segment);
   }
 
@@ -319,7 +348,7 @@ async function fetchBusinessDescription(cik, submission, env) {
   const filing = latestAnnualFiling(submission);
   if (!filing) return { data: { summary: '', filingDate: '' }, cache: 'none' };
 
-  return cachedJson(env, `sec:business-description:${cik}:${filing.accessionNumber}:v1`, TTL.businessDescription, async () => {
+  return cachedJson(env, `sec:business-description:${cik}:${filing.accessionNumber}:v2`, TTL.businessDescription, async () => {
     const accession = filing.accessionNumber.replace(/-/g, '');
     const url = `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${accession}/${filing.primaryDocument}`;
     const res = await fetch(url, {
@@ -348,14 +377,14 @@ function annualSecValues(companyfacts, tags, units) {
     if (!item) continue;
     for (const unit of units) {
       for (const fact of item.units?.[unit] || []) {
-        if (fact.form !== '10-K' || fact.fp !== 'FY') continue;
+        if (!ANNUAL_FORMS.has(fact.form) || fact.fp !== 'FY') continue;
         const val = cleanNumber(fact.val);
         if (val == null || !fact.end) continue;
         const year = Number(String(fact.end).slice(0, 4));
         if (!Number.isFinite(year)) continue;
         const filed = String(fact.filed || '');
         const existing = out.get(year);
-        if (!existing || filed > existing.filed) out.set(year, { filed, val, tag });
+        if (!existing || filed > existing.filed) out.set(year, { filed, val, tag, form: fact.form });
       }
     }
   }
@@ -522,8 +551,8 @@ function buildRows(companyfacts, startYear) {
         eps: epsItem?.val ?? null,
         salesB: revItem?.val == null ? null : revItem.val / 1_000_000_000,
         estimated: false,
-        epsSource: epsItem ? `SEC ${epsItem.tag}` : '',
-        salesSource: revItem ? `SEC ${revItem.tag}` : '',
+        epsSource: epsItem ? `SEC ${epsItem.form} ${epsItem.tag}` : '',
+        salesSource: revItem ? `SEC ${revItem.form} ${revItem.tag}` : '',
       };
     });
 }
@@ -531,7 +560,7 @@ function buildRows(companyfacts, startYear) {
 function quarterlySecValues(companyfacts, tags, units) {
   const out = new Map();
   for (const fact of secValues(companyfacts, 'us-gaap', tags, units)) {
-    if (fact.form !== '10-Q') continue;
+    if (!INTERIM_FORMS.has(fact.form)) continue;
     const frame = String(fact.frame || '');
     const match = frame.match(/^CY(\d{4})Q([1-4])$/);
     if (!match) continue;
@@ -541,7 +570,7 @@ function quarterlySecValues(companyfacts, tags, units) {
     const filed = String(fact.filed || '');
     const existing = out.get(key);
     if (!existing || filed > existing.filed) {
-      out.set(key, { year, quarter, end: fact.end, filed, val: fact.val, tag: fact.tag });
+      out.set(key, { year, quarter, end: fact.end, filed, val: fact.val, tag: fact.tag, form: fact.form });
     }
   }
   return out;
@@ -573,8 +602,8 @@ function buildQuarterlyRows(companyfacts, limit = 8) {
         end: revItem?.end || epsItem?.end || '',
         eps: epsItem?.val ?? null,
         salesB: revItem?.val == null ? null : revItem.val / 1_000_000_000,
-        epsSource: epsItem ? `SEC ${epsItem.tag}` : '',
-        salesSource: revItem ? `SEC ${revItem.tag}` : '',
+        epsSource: epsItem ? `SEC ${epsItem.form} ${epsItem.tag}` : '',
+        salesSource: revItem ? `SEC ${revItem.form} ${revItem.tag}` : '',
       };
     })
     .sort((a, b) => a.sortKey.localeCompare(b.sortKey));
@@ -862,6 +891,7 @@ async function buildFundamentals(ticker, request, env, startYear) {
       yahooChart: meta.regularMarketTime ? new Date(meta.regularMarketTime * 1000).toISOString() : null,
       secFacts: shares?.end || null,
       secProfile: descriptionResult.data.filingDate || null,
+      secFactForms: rows.some((row) => row.salesSource?.includes('20-F') || row.epsSource?.includes('20-F')) ? '20-F / 6-K' : '10-K / 10-Q',
       rendered: new Date().toISOString(),
     },
   };
@@ -877,7 +907,7 @@ export async function onRequestGet(context) {
 
   if (!ticker) return json({ error: 'ticker required' }, { status: 400 });
 
-  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v9`;
+  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v11`;
   const cached = await kvGet(env, renderKey);
   if (cached) {
     return format === 'json' ? json(JSON.parse(cached)) : text(cached);
