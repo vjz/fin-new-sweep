@@ -412,6 +412,78 @@
     }
     .legend-line.ma50 { background: #6d5bd0; }
     .legend-line.ma200 { background: #c27820; }
+    .options-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfa;
+    }
+    .options-card summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      cursor: pointer;
+      padding: 12px;
+      list-style: none;
+    }
+    .options-card summary::-webkit-details-marker {
+      display: none;
+    }
+    .options-action {
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 760;
+      white-space: nowrap;
+    }
+    .options-card[open] .options-action {
+      display: none;
+    }
+    .options-body {
+      border-top: 1px solid var(--line);
+      padding: 10px 12px 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .options-status {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .options-table {
+      background: #fff;
+    }
+    .options-table table {
+      min-width: 680px;
+      font-size: 13px;
+    }
+    .options-table th,
+    .options-table td {
+      padding: 8px 9px;
+    }
+    .option-type {
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      padding: 0 7px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 780;
+    }
+    .option-type.call {
+      background: #e9f5ef;
+      color: #14724f;
+    }
+    .option-type.put {
+      background: #f8ece9;
+      color: #a23a2f;
+    }
+    .options-note,
+    .options-empty {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 8px;
+    }
     .table-wrap {
       overflow-x: auto;
       border: 1px solid var(--line);
@@ -512,6 +584,11 @@
       .section-head { display: block; }
       .section-subtitle { margin-top: 2px; }
       .chart-section { padding: 9px; }
+      .options-card summary { padding: 9px; }
+      .options-body { padding: 8px 9px 9px; }
+      .options-table table { min-width: 0; font-size: 12px; }
+      .options-table th,
+      .options-table td { padding: 7px 4px; }
       .status-chip { font-size: 11px; min-height: 22px; padding: 0 7px; }
       .price-chart { min-height: 170px; }
       .chart-axis, .chart-date { font-size: 11px; }
@@ -542,6 +619,9 @@
         display: block;
       }
       .desc-close {
+        display: none;
+      }
+      .options-card {
         display: none;
       }
     }
