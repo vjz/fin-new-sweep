@@ -35,10 +35,6 @@
     return `$${Math.round(value).toLocaleString()}`;
   }
 
-  function compactDollarVolume(value) {
-    return compactMoney(value);
-  }
-
   function shares(value) {
     if (value == null) return '--';
     if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`;
@@ -72,6 +68,11 @@
   function fmtRangePct(value) {
     if (value == null) return '--';
     return `${Number(value).toFixed(0)}% range`;
+  }
+
+  function fmtRatio(value) {
+    if (value == null) return '--';
+    return `${Number(value).toFixed(1)}x avg`;
   }
 
   function fmtPrice(value) {
@@ -364,9 +365,10 @@
     const offHigh = tradingStats.offFiftyTwoWeekHighPct == null
       ? '-- from high'
       : `${fmtPct(tradingStats.offFiftyTwoWeekHighPct)} from high`;
-    const avgDollarVolumeSubvalue = tradingStats.avgDollarVolumeDays
-      ? `${tradingStats.avgDollarVolumeDays} sessions`
-      : 'Yahoo daily bars';
+    const avgVolumeSubvalue = [
+      `30D avg ${shares(tradingStats.avgVolume30d)}`,
+      tradingStats.volumeRatio30d == null ? '' : fmtRatio(tradingStats.volumeRatio30d),
+    ].filter(Boolean).join(' • ');
     const quoteInline = renderQuote(data.quote);
     const chartSection = renderTechnicalChart(data.technicalChart);
     const optionsSection = renderOptionsCard(data.ticker);
@@ -442,7 +444,7 @@
         <div class="metric"><div class="label">Market cap</div><div class="value">${moneyB(data.marketCap)}</div><div class="subvalue">Durval ${escapeHtml(durvalRange)}</div></div>
         <div class="metric"><div class="label">Shares out</div><div class="value">${shares(data.sharesOutstanding)}</div></div>
         <div class="metric"><div class="label">52W position</div><div class="value">${fmtRangePct(tradingStats.fiftyTwoWeekRangePct)}</div><div class="subvalue">${escapeHtml(offHigh)}</div></div>
-        <div class="metric"><div class="label">50D $ volume</div><div class="value">${compactDollarVolume(tradingStats.avgDollarVolume50d)}</div><div class="subvalue">${escapeHtml(avgDollarVolumeSubvalue)}</div></div>
+        <div class="metric"><div class="label">Volume</div><div class="value">${shares(tradingStats.todayVolume)}</div><div class="subvalue">${escapeHtml(avgVolumeSubvalue)}</div></div>
       </div>
 
       ${chartSection}

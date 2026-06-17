@@ -508,27 +508,36 @@ function buildTradingStats(meta, chart, price) {
   const latestPrice = price ?? cleanNumber(meta.regularMarketPrice);
   const weekHigh = cleanNumber(meta.fiftyTwoWeekHigh);
   const weekLow = cleanNumber(meta.fiftyTwoWeekLow);
+  const regularMarketTime = cleanNumber(meta.regularMarketTime);
+  const regularMarketDate = regularMarketTime == null ? '' : new Date(regularMarketTime * 1000).toISOString().slice(0, 10);
   const rangePct = latestPrice == null || weekHigh == null || weekLow == null || weekHigh === weekLow
     ? null
     : ((latestPrice - weekLow) / (weekHigh - weekLow)) * 100;
   const offHighPct = latestPrice == null || weekHigh == null || weekHigh === 0
     ? null
     : ((latestPrice / weekHigh) - 1) * 100;
-  const dollarVolumeBars = chartBars(chart)
+  const todayVolume = cleanNumber(meta.regularMarketVolume);
+  const volumeBars = chartBars(chart)
     .filter((point) => point.volume != null && point.volume > 0)
-    .slice(-50)
-    .map((point) => point.close * point.volume);
-  const avgDollarVolume50d = dollarVolumeBars.length
-    ? dollarVolumeBars.reduce((sum, value) => sum + value, 0) / dollarVolumeBars.length
+    .filter((point) => !regularMarketDate || new Date(point.ts * 1000).toISOString().slice(0, 10) !== regularMarketDate)
+    .slice(-30)
+    .map((point) => point.volume);
+  const avgVolume30d = volumeBars.length
+    ? volumeBars.reduce((sum, value) => sum + value, 0) / volumeBars.length
     : null;
+  const volumeRatio30d = todayVolume == null || avgVolume30d == null || avgVolume30d === 0
+    ? null
+    : todayVolume / avgVolume30d;
 
   return {
     fiftyTwoWeekHigh: weekHigh,
     fiftyTwoWeekLow: weekLow,
     fiftyTwoWeekRangePct: rangePct,
     offFiftyTwoWeekHighPct: offHighPct,
-    avgDollarVolume50d,
-    avgDollarVolumeDays: dollarVolumeBars.length,
+    todayVolume,
+    avgVolume30d,
+    volumeRatio30d,
+    avgVolumeDays: volumeBars.length,
   };
 }
 
@@ -828,6 +837,11 @@ function renderFundTable(data) {
     data.asOf.secFacts ? `SEC facts ${data.asOf.secFacts}` : '',
     data.summarySource ? `desc ${data.summarySource}` : '',
   ].filter(Boolean);
+  const volumeLine = [
+    shares(data.tradingStats?.todayVolume),
+    data.tradingStats?.avgVolume30d == null ? '' : `30D avg ${shares(data.tradingStats.avgVolume30d)}`,
+    data.tradingStats?.volumeRatio30d == null ? '' : `${data.tradingStats.volumeRatio30d.toFixed(1)}x avg`,
+  ].filter(Boolean).join(' | ');
   const lines = [
     `${data.ticker} Fundamentals`,
     data.name && data.name !== data.ticker ? data.name : '',
@@ -843,7 +857,7 @@ function renderFundTable(data) {
     `Market Capitalization: ${moneyB(data.marketCap)}`,
     `Shares Outstanding:  ${shares(data.sharesOutstanding)}`,
     `52W Position:        ${formatUnsignedPct(data.tradingStats?.fiftyTwoWeekRangePct)} range${data.tradingStats?.offFiftyTwoWeekHighPct == null ? '' : ` (${formatPct(data.tradingStats.offFiftyTwoWeekHighPct)} from high)`}`,
-    `50D Avg $ Volume:    ${compactMoney(data.tradingStats?.avgDollarVolume50d)}`,
+    `Volume:              ${volumeLine || '--'}`,
     `ROE:                 ${formatPct(data.quality?.roe)}`,
     `Pretax Margin:       ${formatPct(data.quality?.pretaxMargin)}`,
     `Liabilities/Assets:  ${formatPct(data.quality?.liabilitiesToAssets)}`,
