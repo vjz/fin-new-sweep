@@ -35,7 +35,7 @@ a:hover {
 
 .app-header {
   display: grid;
-  grid-template-columns: minmax(190px, 1fr) minmax(260px, 420px) auto;
+  grid-template-columns: minmax(190px, 1fr) minmax(260px, 420px);
   align-items: end;
   gap: 12px;
   margin-bottom: 14px;

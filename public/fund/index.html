@@ -32,7 +32,7 @@
     }
     header {
       display: grid;
-      grid-template-columns: minmax(150px, 1fr) minmax(260px, 420px) auto;
+      grid-template-columns: minmax(150px, 1fr) minmax(260px, 420px);
       align-items: end;
       gap: 12px;
       margin-bottom: 14px;
@@ -609,7 +609,7 @@
     }
     @media print {
       header {
-        grid-template-columns: 1fr auto;
+        grid-template-columns: 1fr;
       }
       header a,
       .search,
@@ -637,7 +637,7 @@
     <header class="app-header">
       <div class="brand">
         <a class="brand-title" href="/">Market Sweep</a>
-        <div class="brand-subtitle">Single-ticker dashboard</div>
+        <div id="meta" class="brand-subtitle">Endpoint: /api/fund/WMT</div>
       </div>
       <form id="fund-form" class="search">
         <div class="search-field">
@@ -645,14 +645,9 @@
         </div>
         <button id="load-button" type="submit">Load</button>
       </form>
-      <nav class="app-nav" aria-label="Primary">
-        <a href="/">News</a>
-        <a class="active" href="/fund/">Ticker</a>
-      </nav>
     </header>
 
     <div id="field-error" class="field-error" role="status" aria-live="polite"></div>
-    <div id="meta" class="meta">SEC companyfacts + Yahoo chart metadata, cached at the edge.</div>
     <section id="output" class="panel loading">Loading WMT...</section>
   </main>
 

@@ -310,7 +310,7 @@ def html_page(*, generated_at: str, summary_text: str, items: list[dict], now_ut
   <header class="app-header">
     <div class="brand">
       <a class="brand-title" href="/">{esc(SITE_TITLE)}</a>
-      <div class="brand-subtitle">Market pulse, storylines, and single-ticker dashboards</div>
+      <div class="brand-subtitle">Updated {esc(generated_at)}</div>
     </div>
     <form class="search" data-ticker-nav>
       <div class="search-field">
@@ -318,13 +318,7 @@ def html_page(*, generated_at: str, summary_text: str, items: list[dict], now_ut
       </div>
       <button type="submit">Load</button>
     </form>
-    <nav class="app-nav" aria-label="Primary">
-      <a class="active" href="/">News</a>
-      <a href="/fund/">Ticker</a>
-    </nav>
   </header>
-
-  <div class=\"meta\">Updated {esc(generated_at)}</div>
 
   <div class=\"card\" style=\"margin-bottom:16px\">
     <div style=\"font-size:14px; font-weight:600; margin-bottom:2px;\">Market Pulse</div>
