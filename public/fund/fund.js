@@ -35,6 +35,10 @@
     return `$${Math.round(value).toLocaleString()}`;
   }
 
+  function compactDollarVolume(value) {
+    return compactMoney(value);
+  }
+
   function shares(value) {
     if (value == null) return '--';
     if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`;
@@ -63,6 +67,11 @@
     if (value == null) return '--';
     const prefix = signed && value > 0 ? '+' : '';
     return `${prefix}${Number(value).toFixed(digits)}%`;
+  }
+
+  function fmtRangePct(value) {
+    if (value == null) return '--';
+    return `${Number(value).toFixed(0)}% range`;
   }
 
   function fmtPrice(value) {
@@ -351,6 +360,13 @@
     const quality = data.quality || {};
     const durval = data.durabilityValuation || {};
     const durvalRange = durval.available ? `${compactMoney(durval.rangeLow)}-${compactMoney(durval.rangeHigh)}` : '--';
+    const tradingStats = data.tradingStats || {};
+    const offHigh = tradingStats.offFiftyTwoWeekHighPct == null
+      ? '-- from high'
+      : `${fmtPct(tradingStats.offFiftyTwoWeekHighPct)} from high`;
+    const avgDollarVolumeSubvalue = tradingStats.avgDollarVolumeDays
+      ? `${tradingStats.avgDollarVolumeDays} sessions`
+      : 'Yahoo daily bars';
     const quoteInline = renderQuote(data.quote);
     const chartSection = renderTechnicalChart(data.technicalChart);
     const optionsSection = renderOptionsCard(data.ticker);
@@ -425,8 +441,8 @@
       <div class="metrics">
         <div class="metric"><div class="label">Market cap</div><div class="value">${moneyB(data.marketCap)}</div><div class="subvalue">Durval ${escapeHtml(durvalRange)}</div></div>
         <div class="metric"><div class="label">Shares out</div><div class="value">${shares(data.sharesOutstanding)}</div></div>
-        <div class="metric"><div class="label">Float</div><div class="value">${shares(data.floatShares)}</div></div>
-        <div class="metric"><div class="label">Short interest</div><div class="value">${escapeHtml(data.shortInterest || '--')}</div></div>
+        <div class="metric"><div class="label">52W position</div><div class="value">${fmtRangePct(tradingStats.fiftyTwoWeekRangePct)}</div><div class="subvalue">${escapeHtml(offHigh)}</div></div>
+        <div class="metric"><div class="label">50D $ volume</div><div class="value">${compactDollarVolume(tradingStats.avgDollarVolume50d)}</div><div class="subvalue">${escapeHtml(avgDollarVolumeSubvalue)}</div></div>
       </div>
 
       ${chartSection}

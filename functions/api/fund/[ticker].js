@@ -117,6 +117,10 @@ function formatPct(value) {
   return value == null ? '--' : `${value >= 0 ? '+' : ''}${value.toFixed(0)}%`;
 }
 
+function formatUnsignedPct(value) {
+  return value == null ? '--' : `${value.toFixed(0)}%`;
+}
+
 function formatPrice(value) {
   return value == null ? '--' : `$${value.toFixed(value >= 100 ? 2 : 2)}`;
 }
@@ -436,11 +440,17 @@ function chartMeta(chart) {
 }
 
 function chartCloses(chart) {
+  return chartBars(chart).map(({ ts, close }) => ({ ts, close }));
+}
+
+function chartBars(chart) {
   const result = chart?.chart?.result?.[0];
   const timestamps = result?.timestamp || [];
-  const closes = result?.indicators?.quote?.[0]?.close || [];
+  const quote = result?.indicators?.quote?.[0] || {};
+  const closes = quote.close || [];
+  const volumes = quote.volume || [];
   return timestamps
-    .map((ts, idx) => ({ ts, close: cleanNumber(closes[idx]) }))
+    .map((ts, idx) => ({ ts, close: cleanNumber(closes[idx]), volume: cleanNumber(volumes[idx]) }))
     .filter((point) => point.close != null)
     .sort((a, b) => a.ts - b.ts);
 }
@@ -491,6 +501,34 @@ function buildQuote(meta, chart) {
     regularMarketTime: meta.regularMarketTime ? new Date(meta.regularMarketTime * 1000).toISOString() : null,
     source: 'Yahoo chart metadata / daily close',
     cacheTtlSeconds: TTL.chart,
+  };
+}
+
+function buildTradingStats(meta, chart, price) {
+  const latestPrice = price ?? cleanNumber(meta.regularMarketPrice);
+  const weekHigh = cleanNumber(meta.fiftyTwoWeekHigh);
+  const weekLow = cleanNumber(meta.fiftyTwoWeekLow);
+  const rangePct = latestPrice == null || weekHigh == null || weekLow == null || weekHigh === weekLow
+    ? null
+    : ((latestPrice - weekLow) / (weekHigh - weekLow)) * 100;
+  const offHighPct = latestPrice == null || weekHigh == null || weekHigh === 0
+    ? null
+    : ((latestPrice / weekHigh) - 1) * 100;
+  const dollarVolumeBars = chartBars(chart)
+    .filter((point) => point.volume != null && point.volume > 0)
+    .slice(-50)
+    .map((point) => point.close * point.volume);
+  const avgDollarVolume50d = dollarVolumeBars.length
+    ? dollarVolumeBars.reduce((sum, value) => sum + value, 0) / dollarVolumeBars.length
+    : null;
+
+  return {
+    fiftyTwoWeekHigh: weekHigh,
+    fiftyTwoWeekLow: weekLow,
+    fiftyTwoWeekRangePct: rangePct,
+    offFiftyTwoWeekHighPct: offHighPct,
+    avgDollarVolume50d,
+    avgDollarVolumeDays: dollarVolumeBars.length,
   };
 }
 
@@ -803,9 +841,9 @@ function renderFundTable(data) {
     `Latest Quote:         ${formatPrice(data.quote?.price)} ${data.quote?.change == null || data.quote?.changePct == null ? '' : `${data.quote.change >= 0 ? '+' : ''}${data.quote.change.toFixed(2)} (${data.quote.changePct >= 0 ? '+' : ''}${data.quote.changePct.toFixed(2)}%)`}`.trim(),
     data.quote?.regularMarketTime ? `Quote Time:           ${data.quote.regularMarketTime}${data.quote.marketState ? ` ${data.quote.marketState}` : ''}` : '',
     `Market Capitalization: ${moneyB(data.marketCap)}`,
-    `Shares in Float:     ${shares(data.floatShares)}`,
     `Shares Outstanding:  ${shares(data.sharesOutstanding)}`,
-    `Short Interest:      ${data.shortInterest || '--'}`,
+    `52W Position:        ${formatUnsignedPct(data.tradingStats?.fiftyTwoWeekRangePct)} range${data.tradingStats?.offFiftyTwoWeekHighPct == null ? '' : ` (${formatPct(data.tradingStats.offFiftyTwoWeekHighPct)} from high)`}`,
+    `50D Avg $ Volume:    ${compactMoney(data.tradingStats?.avgDollarVolume50d)}`,
     `ROE:                 ${formatPct(data.quality?.roe)}`,
     `Pretax Margin:       ${formatPct(data.quality?.pretaxMargin)}`,
     `Liabilities/Assets:  ${formatPct(data.quality?.liabilitiesToAssets)}`,
@@ -920,9 +958,8 @@ async function buildFundamentals(ticker, request, env, startYear) {
     price,
     quote: buildQuote(meta, chart),
     marketCap,
-    floatShares: null,
     sharesOutstanding,
-    shortInterest: '--',
+    tradingStats: buildTradingStats(meta, chart, price),
     rows,
     quarterlyRows,
     quality,
