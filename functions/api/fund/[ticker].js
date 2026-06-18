@@ -1,5 +1,6 @@
 const SEC_UA = 'fin-new-sweep/1.0 dealzen.km@gmail.com';
 const YAHOO_UA = 'Mozilla/5.0 fin-new-sweep fund endpoint';
+const SEC_COMPANY_TICKERS_URL = 'https://www.sec.gov/files/company_tickers.json';
 
 const TTL = {
   rendered: 5 * 60,
@@ -312,10 +313,48 @@ async function fetchJson(url, options = {}) {
 }
 
 async function loadCikMap(request, env) {
-  return cachedJson(env, 'sec:cik-map:v1', TTL.cikMap, async () => {
+  return cachedJson(env, 'sec:cik-map:v2', TTL.cikMap, async () => {
     const url = new URL('/company_tickers.json', request.url);
     return fetchJson(url.toString(), { cf: { cacheTtl: TTL.cikMap, cacheEverything: true } });
   });
+}
+
+function normalizeCikMap(data) {
+  const out = {};
+  for (const value of Object.values(data || {})) {
+    if (!value || typeof value !== 'object') continue;
+    const ticker = safeTicker(value.ticker);
+    const cik = value.cik_str;
+    if (ticker && cik != null) out[ticker] = String(cik).padStart(10, '0');
+  }
+  return out;
+}
+
+async function loadLiveCikMap(env) {
+  return cachedJson(env, 'sec:cik-map-live:v1', TTL.cikMap, async () => {
+    const data = await fetchJson(SEC_COMPANY_TICKERS_URL, {
+      headers: { accept: 'application/json', 'user-agent': SEC_UA },
+      cf: { cacheTtl: TTL.cikMap, cacheEverything: true },
+    });
+    return normalizeCikMap(data);
+  });
+}
+
+async function resolveCik(ticker, request, env, warnings) {
+  const cikMapResult = await loadCikMap(request, env);
+  let cik = cikMapResult.data[ticker];
+  if (cik) {
+    return { cik, cache: cikMapResult.cache };
+  }
+
+  const liveCikMapResult = await loadLiveCikMap(env);
+  cik = liveCikMapResult.data[ticker];
+  if (cik) {
+    warnings.push(`CIK resolved from live SEC ticker map: ${liveCikMapResult.cache}`);
+    return { cik, cache: liveCikMapResult.cache };
+  }
+
+  throw new Error(`No SEC CIK mapping for ${ticker}`);
 }
 
 async function fetchChart(ticker, env, range = '5d') {
@@ -914,9 +953,8 @@ function renderFundTable(data) {
 
 async function buildFundamentals(ticker, request, env, startYear) {
   const warnings = [];
-  const cikMapResult = await loadCikMap(request, env);
-  const cik = cikMapResult.data[ticker];
-  if (!cik) throw new Error(`No SEC CIK mapping for ${ticker}`);
+  const cikResult = await resolveCik(ticker, request, env, warnings);
+  const cik = cikResult.cik;
 
   let chart = null;
   let benchmarkChart = null;
@@ -982,7 +1020,7 @@ async function buildFundamentals(ticker, request, env, startYear) {
     technicalChart: buildTechnicalChart(chart, benchmarkChart),
     warnings,
     cache: {
-      cikMap: cikMapResult.cache,
+      cikMap: cikResult.cache,
       yahooChart: chartCache,
       benchmarkChart: benchmarkCache,
       secCompanyfacts: factsResult.cache,
