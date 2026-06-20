@@ -67,6 +67,7 @@ function safeTicker(raw) {
 }
 
 function cleanNumber(value) {
+  if (value == null || (typeof value === 'string' && value.trim() === '')) return null;
   const num = Number(value);
   return Number.isFinite(num) ? num : null;
 }
@@ -1047,7 +1048,7 @@ export async function onRequestGet(context) {
 
   if (!ticker) return json({ error: 'ticker required' }, { status: 400 });
 
-  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v13`;
+  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v14`;
   const cached = await kvGet(env, renderKey);
   if (cached) {
     return format === 'json' ? json(JSON.parse(cached)) : text(cached);
