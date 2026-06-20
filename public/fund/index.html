@@ -326,6 +326,12 @@
       padding: 12px;
       background: #fbfcfa;
     }
+    .chart-section .section-head {
+      align-items: flex-start;
+    }
+    .chart-heading {
+      min-width: 0;
+    }
     .chart-mode-toggle {
       display: inline-flex;
       align-items: center;
@@ -435,11 +441,11 @@
       fill: #fff;
     }
     .chart-line.ma50 {
-      stroke: #6d5bd0;
+      stroke: #c43f36;
       stroke-width: 1.8;
     }
     .chart-line.ma200 {
-      stroke: #c27820;
+      stroke: #1e2524;
       stroke-width: 1.8;
     }
     .chart-axis, .chart-date {
@@ -471,8 +477,8 @@
       border-radius: 999px;
       background: var(--accent);
     }
-    .legend-line.ma50 { background: #6d5bd0; }
-    .legend-line.ma200 { background: #c27820; }
+    .legend-line.ma50 { background: #c43f36; }
+    .legend-line.ma200 { background: #1e2524; }
     .options-card {
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -643,9 +649,10 @@
       .subvalue { font-size: 11px; }
       .section { margin-top: 14px; }
       .section-head { display: block; }
+      .chart-section .section-head { display: flex; }
       .section-subtitle { margin-top: 2px; }
       .chart-section { padding: 9px; }
-      .chart-mode-toggle { margin-top: 8px; }
+      .chart-mode-toggle { margin-top: 0; }
       .options-card summary { padding: 9px; }
       .options-body { padding: 8px 9px 9px; }
       .options-table table { min-width: 0; font-size: 12px; }

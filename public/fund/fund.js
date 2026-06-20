@@ -252,7 +252,7 @@
     return `
       <div class="section chart-section" data-chart-mode="${escapeHtml(chartMode)}">
         <div class="section-head">
-          <div>
+          <div class="chart-heading">
             <div class="section-title">Price Trend</div>
             <div class="section-subtitle">6M daily close, 50D / 200D moving averages</div>
           </div>
