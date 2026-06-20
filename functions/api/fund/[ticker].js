@@ -498,10 +498,20 @@ function chartBars(chart) {
   const result = chart?.chart?.result?.[0];
   const timestamps = result?.timestamp || [];
   const quote = result?.indicators?.quote?.[0] || {};
+  const opens = quote.open || [];
+  const highs = quote.high || [];
+  const lows = quote.low || [];
   const closes = quote.close || [];
   const volumes = quote.volume || [];
   return timestamps
-    .map((ts, idx) => ({ ts, close: cleanNumber(closes[idx]), volume: cleanNumber(volumes[idx]) }))
+    .map((ts, idx) => ({
+      ts,
+      open: cleanNumber(opens[idx]),
+      high: cleanNumber(highs[idx]),
+      low: cleanNumber(lows[idx]),
+      close: cleanNumber(closes[idx]),
+      volume: cleanNumber(volumes[idx]),
+    }))
     .filter((point) => point.close != null)
     .sort((a, b) => a.ts - b.ts);
 }
@@ -600,17 +610,21 @@ function movingAverage(points, index, days) {
 }
 
 function buildTechnicalChart(chart, benchmarkChart) {
-  const stock = chartCloses(chart);
+  const bars = chartBars(chart);
+  const stock = bars.map(({ ts, close }) => ({ ts, close }));
   if (stock.length < 20) return { available: false, points: [] };
 
   const benchmark = chartCloses(benchmarkChart);
   const benchmarkByTs = new Map(benchmark.map((point) => [point.ts, point.close]));
-  const enriched = stock.map((point, index) => ({
-    date: new Date(point.ts * 1000).toISOString().slice(0, 10),
-    close: point.close,
+  const enriched = bars.map((bar, index) => ({
+    date: new Date(bar.ts * 1000).toISOString().slice(0, 10),
+    open: bar.open,
+    high: bar.high,
+    low: bar.low,
+    close: bar.close,
     ma50: movingAverage(stock, index, 50),
     ma200: movingAverage(stock, index, 200),
-    benchmarkClose: benchmarkByTs.get(point.ts) ?? null,
+    benchmarkClose: benchmarkByTs.get(bar.ts) ?? null,
   }));
   const points = enriched.slice(-126);
   const latest = enriched.at(-1) || null;
@@ -625,7 +639,7 @@ function buildTechnicalChart(chart, benchmarkChart) {
   return {
     available: points.length >= 20,
     range: '6M',
-    points: points.map(({ date, close, ma50, ma200 }) => ({ date, close, ma50, ma200 })),
+    points: points.map(({ date, open, high, low, close, ma50, ma200 }) => ({ date, open, high, low, close, ma50, ma200 })),
     latest: latest ? {
       date: latest.date,
       close: latest.close,
@@ -1085,7 +1099,7 @@ export async function onRequestGet(context) {
 
   if (!ticker) return json({ error: 'ticker required' }, { status: 400 });
 
-  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v15`;
+  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v16`;
   const cached = await kvGet(env, renderKey);
   if (cached) {
     return format === 'json' ? json(JSON.parse(cached)) : text(cached);

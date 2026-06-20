@@ -326,6 +326,31 @@
       padding: 12px;
       background: #fbfcfa;
     }
+    .chart-mode-toggle {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      flex-shrink: 0;
+    }
+    .chart-mode-button {
+      min-height: 24px;
+      padding: 0 9px;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 760;
+      cursor: pointer;
+    }
+    .chart-mode-button[aria-pressed="true"] {
+      background: var(--accent);
+      color: #fff;
+    }
     .chart-status {
       display: flex;
       flex-wrap: wrap;
@@ -377,6 +402,37 @@
     .chart-line.close {
       stroke: var(--accent);
       stroke-width: 3;
+    }
+    .chart-section[data-chart-mode="line"] .candle-layer,
+    .chart-section[data-chart-mode="candles"] .line-layer {
+      display: none;
+    }
+    .candle line {
+      stroke-width: 1;
+      vector-effect: non-scaling-stroke;
+    }
+    .candle rect {
+      stroke-width: 1;
+      vector-effect: non-scaling-stroke;
+    }
+    .candle.up line,
+    .candle.up rect {
+      stroke: #14724f;
+    }
+    .candle.up rect {
+      fill: #e9f5ef;
+    }
+    .candle.down line,
+    .candle.down rect {
+      stroke: #a23a2f;
+    }
+    .candle.down rect {
+      fill: #a23a2f;
+    }
+    .candle.flat line,
+    .candle.flat rect {
+      stroke: var(--muted);
+      fill: #fff;
     }
     .chart-line.ma50 {
       stroke: #6d5bd0;
@@ -589,6 +645,7 @@
       .section-head { display: block; }
       .section-subtitle { margin-top: 2px; }
       .chart-section { padding: 9px; }
+      .chart-mode-toggle { margin-top: 8px; }
       .options-card summary { padding: 9px; }
       .options-body { padding: 8px 9px 9px; }
       .options-table table { min-width: 0; font-size: 12px; }

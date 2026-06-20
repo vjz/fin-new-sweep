@@ -7,6 +7,23 @@
   const fieldError = document.getElementById('field-error');
   let activeRequest = null;
   let loadedTicker = '';
+  let chartMode = savedChartMode();
+
+  function savedChartMode() {
+    try {
+      return localStorage.getItem('fundChartMode') === 'candles' ? 'candles' : 'line';
+    } catch {
+      return 'line';
+    }
+  }
+
+  function saveChartMode(mode) {
+    try {
+      localStorage.setItem('fundChartMode', mode);
+    } catch {
+      // Chart mode preference is nice to have; the toggle should still work.
+    }
+  }
 
   function cleanTicker(value) {
     return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9.-]/g, '').slice(0, 16);
@@ -184,6 +201,25 @@
     return path.trim();
   }
 
+  function renderCandles(points, xFor, yFor, candleWidth) {
+    return points.map((point, index) => {
+      if ([point.open, point.high, point.low, point.close].some((value) => value == null || !Number.isFinite(value))) return '';
+      const x = xFor(index);
+      const yHigh = yFor(point.high);
+      const yLow = yFor(point.low);
+      const yOpen = yFor(point.open);
+      const yClose = yFor(point.close);
+      const bodyY = Math.min(yOpen, yClose);
+      const bodyH = Math.max(1, Math.abs(yClose - yOpen));
+      const tone = point.close > point.open ? 'up' : point.close < point.open ? 'down' : 'flat';
+      return `
+        <g class="candle ${tone}">
+          <line x1="${x.toFixed(1)}" y1="${yHigh.toFixed(1)}" x2="${x.toFixed(1)}" y2="${yLow.toFixed(1)}"></line>
+          <rect x="${(x - candleWidth / 2).toFixed(1)}" y="${bodyY.toFixed(1)}" width="${candleWidth.toFixed(1)}" height="${bodyH.toFixed(1)}" rx="0.8"></rect>
+        </g>`;
+    }).join('');
+  }
+
   function renderTechnicalChart(chart) {
     if (!chart?.available || !chart.points?.length) return '';
     const points = chart.points.filter((point) => point.close != null);
@@ -194,7 +230,7 @@
     const height = narrow ? 220 : 230;
     const pad = { top: 14, right: narrow ? 42 : 58, bottom: 28, left: 10 };
     const values = points
-      .flatMap((point) => [point.close, point.ma50, point.ma200])
+      .flatMap((point) => [point.open, point.high, point.low, point.close, point.ma50, point.ma200])
       .filter((value) => value != null && Number.isFinite(value));
     const min = Math.min(...values);
     const max = Math.max(...values);
@@ -205,6 +241,7 @@
     const plotH = height - pad.top - pad.bottom;
     const xFor = (index) => pad.left + (index / Math.max(1, points.length - 1)) * plotW;
     const yFor = (value) => pad.top + ((yMax - value) / Math.max(1, yMax - yMin)) * plotH;
+    const candleWidth = Math.max(2, Math.min(narrow ? 4 : 7, (plotW / points.length) * 0.62));
     const gridValues = [yMin + (yMax - yMin) * 0.25, yMin + (yMax - yMin) * 0.5, yMin + (yMax - yMin) * 0.75];
     const startLabel = points[0]?.date?.slice(5) || '';
     const endLabel = points.at(-1)?.date?.slice(5) || '';
@@ -213,11 +250,15 @@
     const relClass = latest.relativeReturn == null ? '' : latest.relativeReturn >= 0 ? ' good' : ' caution';
 
     return `
-      <div class="section chart-section">
+      <div class="section chart-section" data-chart-mode="${escapeHtml(chartMode)}">
         <div class="section-head">
           <div>
             <div class="section-title">Price Trend</div>
             <div class="section-subtitle">6M daily close, 50D / 200D moving averages</div>
+          </div>
+          <div class="chart-mode-toggle" aria-label="Price chart display mode">
+            <button class="chart-mode-button" type="button" data-chart-mode-value="line" aria-pressed="${chartMode === 'line'}">Line</button>
+            <button class="chart-mode-button" type="button" data-chart-mode-value="candles" aria-pressed="${chartMode === 'candles'}">Candles</button>
           </div>
         </div>
         <div class="chart-status">
@@ -231,9 +272,14 @@
               <line class="chart-grid" x1="${pad.left}" y1="${yFor(value).toFixed(1)}" x2="${width - pad.right}" y2="${yFor(value).toFixed(1)}"></line>
               <text class="chart-axis" x="${width - pad.right + 8}" y="${(yFor(value) + 4).toFixed(1)}">${fmtPrice(value)}</text>
             `).join('')}
+            <g class="chart-layer candle-layer">
+              ${renderCandles(points, xFor, yFor, candleWidth)}
+            </g>
+            <g class="chart-layer line-layer">
+              <path class="chart-line close" d="${linePath(points, 'close', xFor, yFor)}"></path>
+            </g>
             <path class="chart-line ma200" d="${linePath(points, 'ma200', xFor, yFor)}"></path>
             <path class="chart-line ma50" d="${linePath(points, 'ma50', xFor, yFor)}"></path>
-            <path class="chart-line close" d="${linePath(points, 'close', xFor, yFor)}"></path>
             <text class="chart-date" x="${pad.left}" y="${height - 7}">${escapeHtml(startLabel)}</text>
             <text class="chart-date end" x="${width - pad.right}" y="${height - 7}">${escapeHtml(endLabel)}</text>
           </svg>
@@ -547,6 +593,21 @@
   });
 
   output.addEventListener('click', (event) => {
+    const chartModeButton = event.target.closest('.chart-mode-button');
+    if (chartModeButton) {
+      const section = chartModeButton.closest('.chart-section');
+      const mode = chartModeButton.dataset.chartModeValue === 'candles' ? 'candles' : 'line';
+      chartMode = mode;
+      saveChartMode(mode);
+      if (section) {
+        section.dataset.chartMode = mode;
+        section.querySelectorAll('.chart-mode-button').forEach((buttonEl) => {
+          buttonEl.setAttribute('aria-pressed', String(buttonEl.dataset.chartModeValue === mode));
+        });
+      }
+      return;
+    }
+
     const close = event.target.closest('.desc-close');
     if (close) {
       const block = close.closest('.desc-block');
