@@ -140,6 +140,16 @@
   }
 
   function trendRows(rows, firstLabel, changeKeys = null) {
+    if (!rows?.length) {
+      return `
+        <tr>
+          <td>--</td>
+          <td>--</td>
+          <td>--</td>
+          <td>--</td>
+          <td>--</td>
+        </tr>`;
+    }
     let prevEps = null;
     let prevSales = null;
     return (rows || []).map((row) => {
@@ -342,6 +352,7 @@
   }
 
   function renderFund(data) {
+    const hasAnnualRows = Boolean(data.rows?.length);
     const rows = trendRows(data.rows, 'year');
     const quarterlyRows = trendRows(data.quarterlyRows, 'period', { eps: 'epsYoY', sales: 'salesYoY' });
     const rsRows = (data.relativeStrength || []).map((row) => {
@@ -455,7 +466,7 @@
       <div class="section">
         <div class="section-head">
           <div class="section-title">Annual EPS / Sales</div>
-          <div class="section-subtitle">SEC ${escapeHtml(secForms)} facts</div>
+          <div class="section-subtitle">${hasAnnualRows ? `SEC ${escapeHtml(secForms)} facts` : 'SEC financials unavailable'}</div>
         </div>
         <div class="table-wrap">
           <table>

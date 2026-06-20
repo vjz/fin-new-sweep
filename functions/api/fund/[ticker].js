@@ -342,20 +342,31 @@ async function loadLiveCikMap(env) {
 }
 
 async function resolveCik(ticker, request, env, warnings) {
-  const cikMapResult = await loadCikMap(request, env);
+  let cikMapResult = { data: {}, cache: 'unavailable' };
+  try {
+    cikMapResult = await loadCikMap(request, env);
+  } catch (err) {
+    warnings.push(`Local SEC CIK map unavailable: ${err.message}`);
+  }
   let cik = cikMapResult.data[ticker];
   if (cik) {
     return { cik, cache: cikMapResult.cache };
   }
 
-  const liveCikMapResult = await loadLiveCikMap(env);
+  let liveCikMapResult = { data: {}, cache: 'unavailable' };
+  try {
+    liveCikMapResult = await loadLiveCikMap(env);
+  } catch (err) {
+    warnings.push(`Live SEC CIK map unavailable: ${err.message}`);
+  }
   cik = liveCikMapResult.data[ticker];
   if (cik) {
     warnings.push(`CIK resolved from live SEC ticker map: ${liveCikMapResult.cache}`);
     return { cik, cache: liveCikMapResult.cache };
   }
 
-  throw new Error(`No SEC CIK mapping for ${ticker}`);
+  warnings.push(`No SEC CIK mapping for ${ticker}; SEC-backed financial fields are unavailable.`);
+  return { cik: null, cache: liveCikMapResult.cache, missing: true };
 }
 
 async function fetchChart(ticker, env, range = '5d') {
@@ -920,14 +931,18 @@ function renderFundTable(data) {
 
   let prevEps = null;
   let prevSales = null;
-  for (const row of data.rows) {
-    const eps = row.eps == null ? '--' : row.eps.toFixed(2);
-    const sales = row.salesB == null ? '--' : row.salesB.toFixed(2);
-    lines.push(
-      `${String(row.year).padEnd(6)} ${eps.padStart(8)} ${pctChange(row.eps, prevEps, true).padStart(7)} ${sales.padStart(10)} ${pctChange(row.salesB, prevSales).padStart(8)}`
-    );
-    if (row.eps != null) prevEps = row.eps;
-    if (row.salesB != null) prevSales = row.salesB;
+  if (data.rows.length) {
+    for (const row of data.rows) {
+      const eps = row.eps == null ? '--' : row.eps.toFixed(2);
+      const sales = row.salesB == null ? '--' : row.salesB.toFixed(2);
+      lines.push(
+        `${String(row.year).padEnd(6)} ${eps.padStart(8)} ${pctChange(row.eps, prevEps, true).padStart(7)} ${sales.padStart(10)} ${pctChange(row.salesB, prevSales).padStart(8)}`
+      );
+      if (row.eps != null) prevEps = row.eps;
+      if (row.salesB != null) prevSales = row.salesB;
+    }
+  } else {
+    lines.push(`${'--'.padEnd(6)} ${'--'.padStart(8)} ${'--'.padStart(7)} ${'--'.padStart(10)} ${'--'.padStart(8)}`);
   }
 
   if (data.quarterlyRows?.length) {
@@ -954,9 +969,6 @@ function renderFundTable(data) {
 
 async function buildFundamentals(ticker, request, env, startYear) {
   const warnings = [];
-  const cikResult = await resolveCik(ticker, request, env, warnings);
-  const cik = cikResult.cik;
-
   let chart = null;
   let benchmarkChart = null;
   let chartCache = 'none';
@@ -976,38 +988,63 @@ async function buildFundamentals(ticker, request, env, startYear) {
     warnings.push(`SPY benchmark unavailable: ${err.message}`);
   }
 
-  const factsResult = await fetchCompanyfacts(cik, env);
-  const facts = factsResult.data;
-  const submissionsResult = await fetchSubmissions(cik, env);
-  const submission = submissionsResult.data;
-  let descriptionResult = { data: { summary: '', filingDate: '' }, cache: 'none' };
-  try {
-    descriptionResult = await fetchBusinessDescription(cik, submission, env);
-  } catch (err) {
-    warnings.push(`SEC business description unavailable: ${err.message}`);
-  }
+  const cikResult = await resolveCik(ticker, request, env, warnings);
+  const cik = cikResult.cik;
   const meta = chartMeta(chart);
+  if (!cik && !chartCloses(chart).length && !cleanNumber(meta.regularMarketPrice)) {
+    throw new Error(`No market or SEC data available for ${ticker}`);
+  }
+
+  let factsResult = { data: null, cache: 'none' };
+  let submissionsResult = { data: {}, cache: 'none' };
+  let descriptionResult = { data: { summary: '', filingDate: '' }, cache: 'none' };
+  if (cik) {
+    try {
+      factsResult = await fetchCompanyfacts(cik, env);
+    } catch (err) {
+      warnings.push(err.status === 404 ? 'SEC companyfacts unavailable for this ticker.' : `SEC companyfacts unavailable: ${err.message}`);
+    }
+    try {
+      submissionsResult = await fetchSubmissions(cik, env);
+    } catch (err) {
+      warnings.push(`SEC submissions unavailable: ${err.message}`);
+    }
+    if (submissionsResult.data?.filings) {
+      try {
+        descriptionResult = await fetchBusinessDescription(cik, submissionsResult.data, env);
+      } catch (err) {
+        warnings.push(`SEC business description unavailable: ${err.message}`);
+      }
+    }
+  }
+  const facts = factsResult.data;
+  const submission = submissionsResult.data || {};
   const shares = latestSecValue(facts, ['EntityCommonStockSharesOutstanding'], ['shares']);
   const price = cleanNumber(meta.regularMarketPrice);
-  const sharesOutstanding = shares?.val ?? null;
-  const marketCap = price != null && sharesOutstanding != null ? price * sharesOutstanding : null;
+  const sharesOutstanding = shares?.val ?? cleanNumber(meta.sharesOutstanding);
+  const marketCap = cleanNumber(meta.marketCap) ?? (price != null && sharesOutstanding != null ? price * sharesOutstanding : null);
   const industry = submission.sicDescription || '--';
-  const summary = descriptionResult.data.summary || submission.description || `${submission.name || facts.entityName || ticker} is an SEC filer in ${industry}.`;
+  const displayName = meta.longName || meta.shortName || submission.name || facts?.entityName || ticker;
+  const summary = descriptionResult.data.summary
+    || submission.description
+    || (cik && facts
+      ? `${displayName} is an SEC filer in ${industry}.`
+      : `${displayName} has Yahoo quote/chart coverage, but ${cik ? 'SEC companyfacts are unavailable' : 'no SEC CIK mapping was found'}, so SEC-backed financial statement fields are unavailable.`);
   const rows = buildRows(facts, startYear);
   const quarterlyRows = buildQuarterlyRows(facts);
   const quality = buildQuality(facts, marketCap, price);
 
   return {
     ticker,
-    cik: String(cik).padStart(10, '0'),
-    name: meta.longName || meta.shortName || submission.name || facts.entityName || ticker,
+    cik: cik ? String(cik).padStart(10, '0') : null,
+    name: displayName,
     exchange: meta.fullExchangeName || meta.exchangeName || submission.exchanges?.[0] || '--',
     industry,
     location: locationFromSubmission(submission),
     phone: submission.phone || '--',
     website: submission.website || submission.investorWebsite || '--',
     summary,
-    summarySource: descriptionResult.data.source || (submission.description ? 'SEC submissions' : 'SEC profile fallback'),
+    summarySource: descriptionResult.data.source || (submission.description ? 'SEC submissions' : facts ? 'SEC profile fallback' : 'Yahoo chart / SEC facts unavailable'),
     price,
     quote: buildQuote(meta, chart),
     marketCap,
@@ -1032,7 +1069,7 @@ async function buildFundamentals(ticker, request, env, startYear) {
       yahooChart: meta.regularMarketTime ? new Date(meta.regularMarketTime * 1000).toISOString() : null,
       secFacts: shares?.end || null,
       secProfile: descriptionResult.data.filingDate || null,
-      secFactForms: rows.some((row) => row.salesSource?.includes('20-F') || row.epsSource?.includes('20-F')) ? '20-F / 6-K' : '10-K / 10-Q',
+      secFactForms: facts ? (rows.some((row) => row.salesSource?.includes('20-F') || row.epsSource?.includes('20-F')) ? '20-F / 6-K' : '10-K / 10-Q') : '--',
       rendered: new Date().toISOString(),
     },
   };
@@ -1048,7 +1085,7 @@ export async function onRequestGet(context) {
 
   if (!ticker) return json({ error: 'ticker required' }, { status: 400 });
 
-  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v14`;
+  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v15`;
   const cached = await kvGet(env, renderKey);
   if (cached) {
     return format === 'json' ? json(JSON.parse(cached)) : text(cached);
