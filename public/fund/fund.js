@@ -216,6 +216,39 @@
         <g class="candle ${tone}">
           <line x1="${x.toFixed(1)}" y1="${yHigh.toFixed(1)}" x2="${x.toFixed(1)}" y2="${yLow.toFixed(1)}"></line>
           <rect x="${(x - candleWidth / 2).toFixed(1)}" y="${bodyY.toFixed(1)}" width="${candleWidth.toFixed(1)}" height="${bodyH.toFixed(1)}" rx="0.8"></rect>
+      </g>`;
+    }).join('');
+  }
+
+  function baseTone(status) {
+    if (status === 'actionable now') return ' good';
+    if (status === 'extended') return ' caution';
+    return '';
+  }
+
+  function renderBaseOverlays(bases, dateIndex, xFor, yFor, pad) {
+    return bases.map((base) => {
+      const startIndex = dateIndex.get(base.startDate);
+      const endIndex = dateIndex.get(base.endDate);
+      if (startIndex == null || endIndex == null || base.pivot == null || base.support == null) return '';
+
+      const x1 = xFor(startIndex);
+      const x2 = xFor(endIndex);
+      const yTop = yFor(base.pivot);
+      const yBottom = yFor(base.support);
+      const boxWidth = Math.max(2, x2 - x1);
+      const boxHeight = Math.max(2, yBottom - yTop);
+      const labelX = Math.min(x2 + 5, xFor(dateIndex.size - 1) - 54);
+      const labelY = Math.max(pad.top + 10, yTop - 6);
+      const status = base.active ? base.status : 'completed';
+      const depth = base.depthPct == null ? '' : ` ${Number(base.depthPct).toFixed(0)}%`;
+
+      return `
+        <g class="base-overlay${base.active ? ' active' : ''}">
+          <rect class="base-range" x="${x1.toFixed(1)}" y="${yTop.toFixed(1)}" width="${boxWidth.toFixed(1)}" height="${boxHeight.toFixed(1)}"></rect>
+          <line class="base-line pivot" x1="${x1.toFixed(1)}" y1="${yTop.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${yTop.toFixed(1)}"></line>
+          <line class="base-line support" x1="${x1.toFixed(1)}" y1="${yBottom.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${yBottom.toFixed(1)}"></line>
+          <text class="base-label" x="${labelX.toFixed(1)}" y="${labelY.toFixed(1)}">${escapeHtml(status)}${escapeHtml(depth)}</text>
         </g>`;
     }).join('');
   }
@@ -224,6 +257,7 @@
     if (!chart?.available || !chart.points?.length) return '';
     const points = chart.points.filter((point) => point.close != null);
     if (points.length < 2) return '';
+    const bases = (chart.baseLocator?.bases || []).filter((base) => base.startDate && base.endDate);
 
     const narrow = window.matchMedia?.('(max-width: 520px)')?.matches;
     const width = narrow ? 360 : 820;
@@ -231,6 +265,7 @@
     const pad = { top: 14, right: narrow ? 42 : 58, bottom: 28, left: 10 };
     const values = points
       .flatMap((point) => [point.open, point.high, point.low, point.close, point.ma50, point.ma200])
+      .concat(bases.flatMap((base) => [base.pivot, base.support]))
       .filter((value) => value != null && Number.isFinite(value));
     const min = Math.min(...values);
     const max = Math.max(...values);
@@ -241,13 +276,17 @@
     const plotH = height - pad.top - pad.bottom;
     const xFor = (index) => pad.left + (index / Math.max(1, points.length - 1)) * plotW;
     const yFor = (value) => pad.top + ((yMax - value) / Math.max(1, yMax - yMin)) * plotH;
+    const dateIndex = new Map(points.map((point, index) => [point.date, index]));
     const candleWidth = Math.max(2, Math.min(narrow ? 4 : 7, (plotW / points.length) * 0.62));
     const gridValues = [yMin + (yMax - yMin) * 0.25, yMin + (yMax - yMin) * 0.5, yMin + (yMax - yMin) * 0.75];
     const startLabel = points[0]?.date?.slice(5) || '';
     const endLabel = points.at(-1)?.date?.slice(5) || '';
     const latest = chart.latest || {};
+    const activeBase = [...bases].reverse().find((base) => base.active);
     const rel = fmtPct(latest.relativeReturn, { signed: true });
     const relClass = latest.relativeReturn == null ? '' : latest.relativeReturn >= 0 ? ' good' : ' caution';
+    const baseStatus = activeBase?.status || 'no base';
+    const baseDepth = activeBase?.depthPct == null ? '' : ` · ${Number(activeBase.depthPct).toFixed(0)}% deep`;
 
     return `
       <div class="section chart-section" data-chart-mode="${escapeHtml(chartMode)}">
@@ -265,6 +304,7 @@
           <span class="status-chip${latest.above50d == null ? '' : latest.above50d ? ' good' : ' caution'}">${latest.above50d == null ? '50D n/a' : latest.above50d ? 'Above 50D' : 'Below 50D'}</span>
           <span class="status-chip${latest.above200d == null ? '' : latest.above200d ? ' good' : ' caution'}">${latest.above200d == null ? '200D n/a' : latest.above200d ? 'Above 200D' : 'Below 200D'}</span>
           <span class="status-chip${relClass}">RS vs SPY ${rel}</span>
+          <span class="status-chip${baseTone(baseStatus)}">Base ${escapeHtml(baseStatus)}${escapeHtml(baseDepth)}</span>
         </div>
         <div class="chart-wrap" aria-label="6 month price chart">
           <svg class="price-chart" viewBox="0 0 ${width} ${height}" role="img">
@@ -272,6 +312,9 @@
               <line class="chart-grid" x1="${pad.left}" y1="${yFor(value).toFixed(1)}" x2="${width - pad.right}" y2="${yFor(value).toFixed(1)}"></line>
               <text class="chart-axis" x="${width - pad.right + 8}" y="${(yFor(value) + 4).toFixed(1)}">${fmtPrice(value)}</text>
             `).join('')}
+            <g class="chart-layer base-layer">
+              ${renderBaseOverlays(bases, dateIndex, xFor, yFor, pad)}
+            </g>
             <g class="chart-layer candle-layer">
               ${renderCandles(points, xFor, yFor, candleWidth)}
             </g>
@@ -288,6 +331,7 @@
           <span><i class="legend-line close"></i>Price</span>
           <span><i class="legend-line ma50"></i>50D</span>
           <span><i class="legend-line ma200"></i>200D</span>
+          <span><i class="legend-line base"></i>Base</span>
         </div>
       </div>`;
   }

@@ -609,6 +609,82 @@ function movingAverage(points, index, days) {
   return slice.reduce((sum, point) => sum + point.close, 0) / days;
 }
 
+function buildBaseLocator(enriched) {
+  const bars = enriched
+    .map((bar, index) => ({ ...bar, index }))
+    .filter((bar) => bar.high != null && bar.low != null && bar.close != null);
+  if (bars.length < 20) return { bases: [], settings: { minBars: 15, maxBars: 99 } };
+
+  const minBars = 15;
+  const maxBars = 99;
+  const visibleStart = Math.max(0, enriched.length - 126);
+  const latest = bars.at(-1);
+
+  const scoreCandidate = (start, end, active = false) => {
+    const slice = enriched.slice(start, end + 1)
+      .map((bar, index) => ({ ...bar, index: start + index }))
+      .filter((bar) => bar.high != null && bar.low != null && bar.close != null);
+    if (slice.length < minBars) return null;
+
+    const highBar = slice.reduce((best, bar) => (bar.high > best.high ? bar : best), slice[0]);
+    const lowBar = slice.reduce((best, bar) => (bar.low < best.low ? bar : best), slice[0]);
+    const pivot = highBar.high;
+    const support = lowBar.low;
+    if (!pivot || !support || support <= 0 || pivot <= support) return null;
+
+    const depthPct = ((pivot / support) - 1) * 100;
+    const latestClose = latest?.close ?? slice.at(-1)?.close;
+    if (depthPct > 38 || latestClose == null) return null;
+
+    const agePenalty = Math.max(0, end - highBar.index - 8) * 0.08;
+    const depthScore = Math.max(0, 38 - depthPct);
+    const lengthScore = Math.min(35, slice.length * 0.45);
+    const lateBreakout = latestClose > pivot * 1.08;
+    const activeFit = active && latestClose >= support * 0.96 && latestClose <= pivot * 1.08;
+    const score = lengthScore + depthScore - agePenalty + (activeFit ? 10 : 0) - (lateBreakout ? 20 : 0);
+
+    let status = 'needs handle';
+    if (latestClose > pivot * 1.05) status = 'extended';
+    else if (latestClose >= pivot * 0.95) status = 'actionable now';
+
+    return {
+      startDate: slice[0].date,
+      endDate: enriched[end]?.date || slice.at(-1).date,
+      pivot,
+      support,
+      midpoint: (pivot + support) / 2,
+      depthPct,
+      bars: slice.length,
+      status,
+      active,
+      score,
+    };
+  };
+
+  let activeBase = null;
+  const activeEnd = enriched.length - 1;
+  for (let length = minBars; length <= Math.min(maxBars, enriched.length); length += 1) {
+    const candidate = scoreCandidate(activeEnd - length + 1, activeEnd, true);
+    if (candidate && (!activeBase || candidate.score > activeBase.score)) activeBase = candidate;
+  }
+
+  const completed = [];
+  for (let end = visibleStart + minBars; end < enriched.length - 5; end += 1) {
+    const candidate = scoreCandidate(Math.max(0, end - 44), end, false);
+    const nextClose = enriched[end + 1]?.close;
+    if (!candidate || nextClose == null || nextClose < candidate.pivot * 1.02) continue;
+    const overlaps = completed.some((base) => Math.abs(new Date(base.endDate) - new Date(candidate.endDate)) < 12 * 24 * 60 * 60 * 1000);
+    if (!overlaps) completed.push({ ...candidate, breakoutDate: enriched[end + 1]?.date, status: 'completed' });
+  }
+
+  const bases = [
+    ...completed.slice(-2),
+    ...(activeBase ? [activeBase] : []),
+  ].map(({ score, ...base }) => base);
+
+  return { bases, settings: { minBars, maxBars } };
+}
+
 function buildTechnicalChart(chart, benchmarkChart) {
   const bars = chartBars(chart);
   const stock = bars.map(({ ts, close }) => ({ ts, close }));
@@ -640,6 +716,7 @@ function buildTechnicalChart(chart, benchmarkChart) {
     available: points.length >= 20,
     range: '6M',
     points: points.map(({ date, open, high, low, close, ma50, ma200 }) => ({ date, open, high, low, close, ma50, ma200 })),
+    baseLocator: buildBaseLocator(enriched),
     latest: latest ? {
       date: latest.date,
       close: latest.close,
@@ -1099,7 +1176,7 @@ export async function onRequestGet(context) {
 
   if (!ticker) return json({ error: 'ticker required' }, { status: 400 });
 
-  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v16`;
+  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v17`;
   const cached = await kvGet(env, renderKey);
   if (cached) {
     return format === 'json' ? json(JSON.parse(cached)) : text(cached);
