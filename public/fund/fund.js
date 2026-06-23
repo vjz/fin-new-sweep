@@ -239,20 +239,17 @@
       const boxWidth = Math.max(2, x2 - x1);
       const boxHeight = Math.max(2, yBottom - yTop);
       const depth = base.depthPct == null ? '' : ` ${Number(base.depthPct).toFixed(0)}%`;
-      const label = base.active ? `Active${depth}` : `Base${depth}`;
-      const activeLabelX = Math.min(x2 - 6, xFor(dateIndex.size - 1) - 8);
-      const completedLabelX = x1 + 6;
-      const labelX = base.active ? activeLabelX : completedLabelX;
-      const labelY = Math.max(pad.top + 12, yTop - 7);
+      const label = `${base.status || (base.active ? 'active' : 'base')}${depth}`;
+      const labelX = x1 + 6;
+      const labelY = Math.max(pad.top + 12, yTop + 13);
       const labelClass = base.active ? ' active-label' : '';
-      const anchor = base.active ? 'end' : 'start';
 
       return `
         <g class="base-overlay${base.active ? ' active' : ''}">
           <rect class="base-range" x="${x1.toFixed(1)}" y="${yTop.toFixed(1)}" width="${boxWidth.toFixed(1)}" height="${boxHeight.toFixed(1)}"></rect>
           <line class="base-line pivot" x1="${x1.toFixed(1)}" y1="${yTop.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${yTop.toFixed(1)}"></line>
           <line class="base-line support" x1="${x1.toFixed(1)}" y1="${yBottom.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${yBottom.toFixed(1)}"></line>
-          <text class="base-label${labelClass}" x="${labelX.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="${anchor}">${escapeHtml(label)}</text>
+          <text class="base-label${labelClass}" x="${labelX.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="start">${escapeHtml(label)}</text>
         </g>`;
     }).join('');
   }
