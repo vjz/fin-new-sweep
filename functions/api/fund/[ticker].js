@@ -1201,7 +1201,7 @@ export async function onRequestGet(context) {
 
   if (!ticker) return json({ error: 'ticker required' }, { status: 400 });
 
-  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v20`;
+  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v21`;
   const cached = await kvGet(env, renderKey);
   if (cached) {
     return format === 'json' ? json(JSON.parse(cached)) : text(cached);
