@@ -760,35 +760,60 @@ function buildRows(companyfacts, startYear) {
     });
 }
 
-function quarterlySecValues(companyfacts, tags, units) {
+function fiscalPeriodFromEnd(end, fiscalYearEnd) {
+  const text = String(end || '');
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const fye = String(fiscalYearEnd || '').replace(/\D/g, '').padStart(4, '0').slice(-4);
+  const endMonth = Number(fye.slice(0, 2));
+  const endDay = Number(fye.slice(2, 4));
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)
+    || !Number.isFinite(endMonth) || !Number.isFinite(endDay) || endMonth < 1 || endMonth > 12) {
+    return null;
+  }
+
+  const fiscalYear = (month < endMonth || (month === endMonth && day <= endDay)) ? year : year + 1;
+  const fiscalStartMonth = endMonth;
+  const offset = (month - fiscalStartMonth + 12) % 12;
+  const fiscalQuarter = Math.min(4, Math.floor(offset / 3) + 1);
+  return { year: fiscalYear, quarter: `Q${fiscalQuarter}` };
+}
+
+function quarterlySecValues(companyfacts, tags, units, fiscalYearEnd) {
   const out = new Map();
   for (const fact of secValues(companyfacts, 'us-gaap', tags, units)) {
     if (!INTERIM_FORMS.has(fact.form)) continue;
     const frame = String(fact.frame || '');
     const match = frame.match(/^CY(\d{4})Q([1-4])$/);
     if (!match) continue;
-    const year = Number(match[1]);
-    const quarter = `Q${match[2]}`;
+    const fiscalPeriod = fiscalPeriodFromEnd(fact.end, fiscalYearEnd);
+    const year = fiscalPeriod?.year ?? Number(match[1]);
+    const quarter = fiscalPeriod?.quarter ?? `Q${match[2]}`;
     const key = `${year}-${quarter}`;
     const filed = String(fact.filed || '');
     const existing = out.get(key);
     if (!existing || filed > existing.filed) {
-      out.set(key, { year, quarter, end: fact.end, filed, val: fact.val, tag: fact.tag, form: fact.form });
+      out.set(key, { year, quarter, end: fact.end, filed, val: fact.val, tag: fact.tag, form: fact.form, frame });
     }
   }
   return out;
 }
 
-function buildQuarterlyRows(companyfacts, limit = 8) {
+function buildQuarterlyRows(companyfacts, fiscalYearEnd, limit = 8) {
   const revenue = quarterlySecValues(
     companyfacts,
     ['Revenues', 'SalesRevenueNet', 'RevenueFromContractWithCustomerExcludingAssessedTax'],
-    ['USD']
+    ['USD'],
+    fiscalYearEnd
   );
   const eps = quarterlySecValues(
     companyfacts,
     ['EarningsPerShareDiluted', 'EarningsPerShareBasicAndDiluted', 'EarningsPerShareBasic'],
-    ['USD/shares']
+    ['USD/shares'],
+    fiscalYearEnd
   );
   const keys = new Set([...revenue.keys(), ...eps.keys()]);
   const allRows = [...keys]
@@ -800,7 +825,7 @@ function buildQuarterlyRows(companyfacts, limit = 8) {
         key,
         year: Number(year),
         quarter,
-        period: `${quarter} ${year}`,
+        period: `F${quarter} ${year}`,
         sortKey: `${year}${quarter.slice(1)}`,
         end: revItem?.end || epsItem?.end || '',
         eps: epsItem?.val ?? null,
@@ -1122,7 +1147,7 @@ async function buildFundamentals(ticker, request, env, startYear) {
       ? `${displayName} is an SEC filer in ${industry}.`
       : `${displayName} has Yahoo quote/chart coverage, but ${cik ? 'SEC companyfacts are unavailable' : 'no SEC CIK mapping was found'}, so SEC-backed financial statement fields are unavailable.`);
   const rows = buildRows(facts, startYear);
-  const quarterlyRows = buildQuarterlyRows(facts);
+  const quarterlyRows = buildQuarterlyRows(facts, submission.fiscalYearEnd);
   const quality = buildQuality(facts, marketCap, price);
 
   return {
