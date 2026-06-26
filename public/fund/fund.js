@@ -132,6 +132,19 @@
     return value ? String(value).slice(0, 10) : 'n/a';
   }
 
+  function fmtShortDate(value) {
+    const text = firstDate(value);
+    if (text === 'n/a') return text;
+    const date = new Date(`${text}T00:00:00Z`);
+    if (Number.isNaN(date.getTime())) return text;
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: 'UTC',
+    });
+  }
+
   function truncateWords(value, maxWords = 34) {
     const text = String(value || '').replace(/\s+/g, ' ').trim();
     if (!text) return '--';
@@ -470,6 +483,10 @@
     const optionsSection = renderOptionsCard(data.ticker);
     const description = renderDescription(data.summary);
     const secForms = data.asOf?.secFactForms || '10-K / 10-Q';
+    const latestQuarter = [...(data.quarterlyRows || [])].reverse().find((row) => row.end || row.filed);
+    const quarterlyMeta = latestQuarter
+      ? ` · Latest ${escapeHtml(latestQuarter.period || 'quarter')} ended ${escapeHtml(fmtShortDate(latestQuarter.end))} · reported ${escapeHtml(fmtShortDate(latestQuarter.filed))}`
+      : '';
     const qualitySection = `
       <div class="section">
         <div class="section-head">
@@ -489,7 +506,7 @@
       <div class="section">
         <div class="section-head">
           <div class="section-title">Quarterly EPS / Sales</div>
-          <div class="section-subtitle">SEC ${escapeHtml(secForms)} facts, YoY change</div>
+          <div class="section-subtitle">SEC ${escapeHtml(secForms)} facts, YoY change${quarterlyMeta}</div>
         </div>
         <div class="table-wrap">
           <table>

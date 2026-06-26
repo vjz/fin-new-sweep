@@ -828,6 +828,7 @@ function buildQuarterlyRows(companyfacts, fiscalYearEnd, limit = 8) {
         period: `F${quarter} ${year}`,
         sortKey: `${year}${quarter.slice(1)}`,
         end: revItem?.end || epsItem?.end || '',
+        filed: revItem?.filed || epsItem?.filed || '',
         eps: epsItem?.val ?? null,
         salesB: revItem?.val == null ? null : revItem.val / 1_000_000_000,
         epsSource: epsItem ? `SEC ${epsItem.form} ${epsItem.tag}` : '',
@@ -1201,7 +1202,7 @@ export async function onRequestGet(context) {
 
   if (!ticker) return json({ error: 'ticker required' }, { status: 400 });
 
-  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v21`;
+  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v22`;
   const cached = await kvGet(env, renderKey);
   if (cached) {
     return format === 'json' ? json(JSON.parse(cached)) : text(cached);
