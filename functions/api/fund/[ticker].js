@@ -776,10 +776,43 @@ function fiscalPeriodFromEnd(end, fiscalYearEnd) {
   }
 
   const fiscalYear = (month < endMonth || (month === endMonth && day <= endDay)) ? year : year + 1;
-  const fiscalStartMonth = endMonth;
+  const fiscalStartMonth = (endMonth % 12) + 1;
   const offset = (month - fiscalStartMonth + 12) % 12;
   const fiscalQuarter = Math.min(4, Math.floor(offset / 3) + 1);
   return { year: fiscalYear, quarter: `Q${fiscalQuarter}` };
+}
+
+function fiscalPeriodFromFact(fact, fiscalYearEnd) {
+  const fy = Number(fact?.fy);
+  const fp = String(fact?.fp || '').toUpperCase();
+  if (Number.isFinite(fy) && /^Q[1-4]$/.test(fp)) return { year: fy, quarter: fp };
+  if (Number.isFinite(fy) && fp === 'FY') return { year: fy, quarter: 'Q4' };
+  return fiscalPeriodFromEnd(fact?.end, fiscalYearEnd);
+}
+
+function annualSecValuesByFiscalYear(companyfacts, tags, units, fiscalYearEnd) {
+  const out = new Map();
+  const facts = companyfacts?.facts?.['us-gaap'] || {};
+  for (const tag of tags) {
+    const item = facts[tag];
+    if (!item) continue;
+    for (const unit of units) {
+      for (const fact of item.units?.[unit] || []) {
+        if (!ANNUAL_FORMS.has(fact.form) || fact.fp !== 'FY') continue;
+        const val = cleanNumber(fact.val);
+        if (val == null || !fact.end) continue;
+        const period = fiscalPeriodFromFact(fact, fiscalYearEnd);
+        const year = period?.year ?? Number(String(fact.end).slice(0, 4));
+        if (!Number.isFinite(year)) continue;
+        const filed = String(fact.filed || '');
+        const existing = out.get(year);
+        if (!existing || filed > existing.filed) {
+          out.set(year, { year, end: fact.end, filed, val, tag, form: fact.form, frame: fact.frame });
+        }
+      }
+    }
+  }
+  return out;
 }
 
 function quarterlySecValues(companyfacts, tags, units, fiscalYearEnd) {
@@ -789,7 +822,7 @@ function quarterlySecValues(companyfacts, tags, units, fiscalYearEnd) {
     const frame = String(fact.frame || '');
     const match = frame.match(/^CY(\d{4})Q([1-4])$/);
     if (!match) continue;
-    const fiscalPeriod = fiscalPeriodFromEnd(fact.end, fiscalYearEnd);
+    const fiscalPeriod = fiscalPeriodFromFact(fact, fiscalYearEnd);
     const year = fiscalPeriod?.year ?? Number(match[1]);
     const quarter = fiscalPeriod?.quarter ?? `Q${match[2]}`;
     const key = `${year}-${quarter}`;
@@ -800,6 +833,28 @@ function quarterlySecValues(companyfacts, tags, units, fiscalYearEnd) {
     }
   }
   return out;
+}
+
+function addDerivedFourthQuarters(quarterly, annual) {
+  for (const annualItem of annual.values()) {
+    const year = annualItem.year;
+    const key = `${year}-Q4`;
+    if (quarterly.has(key)) continue;
+    const firstThree = ['Q1', 'Q2', 'Q3'].map((quarter) => quarterly.get(`${year}-${quarter}`));
+    if (firstThree.some((item) => item?.val == null)) continue;
+    const val = annualItem.val - firstThree.reduce((sum, item) => sum + item.val, 0);
+    quarterly.set(key, {
+      year,
+      quarter: 'Q4',
+      end: annualItem.end,
+      filed: annualItem.filed,
+      val,
+      tag: annualItem.tag,
+      form: annualItem.form,
+      frame: annualItem.frame,
+      derived: true,
+    });
+  }
 }
 
 function buildQuarterlyRows(companyfacts, fiscalYearEnd, limit = 8) {
@@ -815,6 +870,18 @@ function buildQuarterlyRows(companyfacts, fiscalYearEnd, limit = 8) {
     ['USD/shares'],
     fiscalYearEnd
   );
+  addDerivedFourthQuarters(revenue, annualSecValuesByFiscalYear(
+    companyfacts,
+    ['Revenues', 'SalesRevenueNet', 'RevenueFromContractWithCustomerExcludingAssessedTax'],
+    ['USD'],
+    fiscalYearEnd
+  ));
+  addDerivedFourthQuarters(eps, annualSecValuesByFiscalYear(
+    companyfacts,
+    ['EarningsPerShareDiluted', 'EarningsPerShareBasicAndDiluted', 'EarningsPerShareBasic'],
+    ['USD/shares'],
+    fiscalYearEnd
+  ));
   const keys = new Set([...revenue.keys(), ...eps.keys()]);
   const allRows = [...keys]
     .map((key) => {
@@ -831,8 +898,8 @@ function buildQuarterlyRows(companyfacts, fiscalYearEnd, limit = 8) {
         filed: revItem?.filed || epsItem?.filed || '',
         eps: epsItem?.val ?? null,
         salesB: revItem?.val == null ? null : revItem.val / 1_000_000_000,
-        epsSource: epsItem ? `SEC ${epsItem.form} ${epsItem.tag}` : '',
-        salesSource: revItem ? `SEC ${revItem.form} ${revItem.tag}` : '',
+        epsSource: epsItem ? `SEC ${epsItem.form}${epsItem.derived ? ' derived' : ''} ${epsItem.tag}` : '',
+        salesSource: revItem ? `SEC ${revItem.form}${revItem.derived ? ' derived' : ''} ${revItem.tag}` : '',
       };
     })
     .sort((a, b) => a.sortKey.localeCompare(b.sortKey));
@@ -1202,7 +1269,7 @@ export async function onRequestGet(context) {
 
   if (!ticker) return json({ error: 'ticker required' }, { status: 400 });
 
-  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v22`;
+  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v23`;
   const cached = await kvGet(env, renderKey);
   if (cached) {
     return format === 'json' ? json(JSON.parse(cached)) : text(cached);
