@@ -374,6 +374,15 @@
       </details>`;
   }
 
+  function optionFlowTone(row) {
+    const type = String(row?.type || '').toUpperCase();
+    const direction = String(row?.direction || '').toLowerCase();
+    if ((type === 'CALL' && direction === 'buying') || (type === 'PUT' && direction === 'selling')) return 'green';
+    if (type === 'PUT' && direction === 'buying') return 'red';
+    if (type === 'CALL' && direction === 'selling') return 'yellow';
+    return 'neutral';
+  }
+
   function renderOptionsActivity(data) {
     if (!data?.success) {
       return '<div class="options-empty">Options activity unavailable.</div>';
@@ -385,12 +394,10 @@
     }
     const rows = data.data.map((row) => `
       <tr>
-        <td><span class="option-type ${row.type === 'CALL' ? 'call' : 'put'}">${escapeHtml(row.type)}</span></td>
+        <td><span class="option-type ${optionFlowTone(row)}" title="${escapeHtml(row.direction || '')} ${escapeHtml(row.type || '')}">${escapeHtml(row.type)}</span></td>
         <td>${escapeHtml(row.expiration || '--')}</td>
         <td>${fmtMoney(row.strike)}</td>
         <td>${fmtMoney(row.last)}</td>
-        <td>${Number(row.volOi).toFixed(2)}x</td>
-        <td>${escapeHtml(row.direction || '--')}</td>
         <td>${fmtInt(row.volume)}</td>
         <td>${fmtInt(row.openInterest)}</td>
       </tr>`).join('');
@@ -402,7 +409,7 @@
       <div class="table-wrap options-table">
         <table>
           <thead>
-            <tr><th>Type</th><th>Exp</th><th>Strike</th><th>Last</th><th>Vol/OI</th><th>Dir</th><th>Vol</th><th>OI</th></tr>
+            <tr><th>Type</th><th>Exp</th><th>Strike</th><th>Last</th><th>Vol</th><th>OI</th></tr>
           </thead>
           <tbody>${rows}</tbody>
         </table>
