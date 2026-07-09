@@ -1266,7 +1266,7 @@ async function buildFundamentals(ticker, request, env, startYear) {
   const submission = submissionsResult.data || {};
   const shares = latestSharesOutstanding(facts);
   const price = cleanNumber(meta.regularMarketPrice);
-  const sharesOutstanding = shares?.val ?? cleanNumber(meta.sharesOutstanding);
+  let sharesOutstanding = shares?.val ?? cleanNumber(meta.sharesOutstanding);
   let marketCap = cleanNumber(meta.marketCap);
   if (marketCap == null) {
     try {
@@ -1281,6 +1281,10 @@ async function buildFundamentals(ticker, request, env, startYear) {
     }
   }
   if (marketCap == null && price != null && sharesOutstanding != null) marketCap = price * sharesOutstanding;
+  if (sharesOutstanding == null && marketCap != null && price != null && price > 0) {
+    sharesOutstanding = marketCap / price;
+    warnings.push('Shares outstanding implied from market cap / price.');
+  }
   const industry = submission.sicDescription || '--';
   const displayName = meta.longName || meta.shortName || submission.name || facts?.entityName || ticker;
   const summary = descriptionResult.data.summary
