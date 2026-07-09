@@ -782,14 +782,6 @@ function fiscalPeriodFromEnd(end, fiscalYearEnd) {
   return { year: fiscalYear, quarter: `Q${fiscalQuarter}` };
 }
 
-function fiscalPeriodFromFact(fact, fiscalYearEnd) {
-  const fy = Number(fact?.fy);
-  const fp = String(fact?.fp || '').toUpperCase();
-  if (Number.isFinite(fy) && /^Q[1-4]$/.test(fp)) return { year: fy, quarter: fp };
-  if (Number.isFinite(fy) && fp === 'FY') return { year: fy, quarter: 'Q4' };
-  return fiscalPeriodFromEnd(fact?.end, fiscalYearEnd);
-}
-
 function annualSecValuesByFiscalYear(companyfacts, tags, units, fiscalYearEnd) {
   const out = new Map();
   const facts = companyfacts?.facts?.['us-gaap'] || {};
@@ -801,7 +793,7 @@ function annualSecValuesByFiscalYear(companyfacts, tags, units, fiscalYearEnd) {
         if (!ANNUAL_FORMS.has(fact.form) || fact.fp !== 'FY') continue;
         const val = cleanNumber(fact.val);
         if (val == null || !fact.end) continue;
-        const period = fiscalPeriodFromFact(fact, fiscalYearEnd);
+        const period = fiscalPeriodFromEnd(fact.end, fiscalYearEnd);
         const year = period?.year ?? Number(String(fact.end).slice(0, 4));
         if (!Number.isFinite(year)) continue;
         const filed = String(fact.filed || '');
@@ -822,7 +814,7 @@ function quarterlySecValues(companyfacts, tags, units, fiscalYearEnd) {
     const frame = String(fact.frame || '');
     const match = frame.match(/^CY(\d{4})Q([1-4])$/);
     if (!match) continue;
-    const fiscalPeriod = fiscalPeriodFromFact(fact, fiscalYearEnd);
+    const fiscalPeriod = fiscalPeriodFromEnd(fact.end, fiscalYearEnd);
     const year = fiscalPeriod?.year ?? Number(match[1]);
     const quarter = fiscalPeriod?.quarter ?? `Q${match[2]}`;
     const key = `${year}-${quarter}`;
@@ -1008,7 +1000,7 @@ function buildDurabilityValuation(ticker, quality, quarterlyRows, annualRows, ma
   const latestQuarter = [...(quarterlyRows || [])].reverse().find((row) => row.salesB != null);
   const priorYearQuarter = latestQuarter
     ? [...(quarterlyRows || [])]
-      .filter((row) => row.salesB != null && row.period?.slice(0, 2) === latestQuarter.period?.slice(0, 2) && row.sortKey < latestQuarter.sortKey)
+      .filter((row) => row.salesB != null && row.quarter === latestQuarter.quarter && row.sortKey < latestQuarter.sortKey)
       .at(-1)
     : null;
   const latestAnnual = [...(annualRows || [])].reverse().find((row) => row.salesB != null);
@@ -1025,6 +1017,31 @@ function buildDurabilityValuation(ticker, quality, quarterlyRows, annualRows, ma
   const grossMarginPct = quality?.grossMargin ?? null;
   const qualityMultiplier = QUALITY_DEFAULTS[ticker] ?? 1.00;
   const suggestedDurability = DURABILITY_DEFAULTS[ticker] ?? 0.75;
+  const notes = [];
+  const source = latestQuarter?.salesB != null ? 'latest quarterly sales x4' : 'latest annual sales';
+
+  if (latestQuarter?.salesB != null) {
+    notes.push(`sales run-rate uses ${latestQuarter.period} SEC sales annualized x4`);
+  } else if (latestAnnual?.salesB != null) {
+    notes.push(`sales uses latest annual SEC sales for FY ${latestAnnual.year}`);
+  }
+  if (latestQuarter?.salesB != null && priorYearQuarter?.salesB) {
+    notes.push(`growth compares ${latestQuarter.period} to ${priorYearQuarter.period}`);
+  } else if (latestAnnual?.salesB != null && priorAnnual?.salesB) {
+    notes.push(`growth falls back to FY ${latestAnnual.year} vs FY ${priorAnnual.year}`);
+  }
+  if (latestQuarter?.salesSource?.includes('derived') || priorYearQuarter?.salesSource?.includes('derived')) {
+    notes.push('sales growth includes a derived quarterly value');
+  }
+  if (latestQuarter?.salesB != null) {
+    notes.push('quarterly run-rate can overstate/understate cyclicals');
+  }
+  if (salesGrowthPct != null && Math.abs(salesGrowthPct) >= 100) {
+    notes.push(`growth is unusually large at ${salesGrowthPct >= 0 ? '+' : ''}${salesGrowthPct.toFixed(0)}%`);
+  }
+  if (grossMarginPct != null && quality?.fiscalYear) {
+    notes.push(`gross margin uses FY ${quality.fiscalYear}`);
+  }
 
   if (ttmSales == null || salesGrowthPct == null || grossMarginPct == null) {
     return {
@@ -1034,6 +1051,8 @@ function buildDurabilityValuation(ticker, quality, quarterlyRows, annualRows, ma
         salesGrowthPct == null ? 'salesGrowthPct' : '',
         grossMarginPct == null ? 'grossMarginPct' : '',
       ].filter(Boolean),
+      notes,
+      source,
     };
   }
 
@@ -1061,7 +1080,8 @@ function buildDurabilityValuation(ticker, quality, quarterlyRows, annualRows, ma
     suggestedValue: suggested?.impliedMarketCap ?? null,
     suggestedUpsideDownsidePct: suggested?.upsideDownsidePct ?? null,
     valuations,
-    source: latestQuarter?.salesB != null ? 'latest quarterly sales x4' : 'latest annual sales',
+    source,
+    notes,
   };
 }
 
@@ -1100,6 +1120,9 @@ function renderFundTable(data) {
     `Price/Sales:         ${formatNumber(data.quality?.priceToSales)}`,
     data.durabilityValuation?.available
       ? `Durval Range:        ${compactMoney(data.durabilityValuation.rangeLow)}-${compactMoney(data.durabilityValuation.rangeHigh)}`
+      : '',
+    data.durabilityValuation?.notes?.length
+      ? `Durval Inputs:       ${data.durabilityValuation.notes.join('; ')}`
       : '',
     '',
     sourceBits.length ? `Data: ${sourceBits.join('; ')}` : '',

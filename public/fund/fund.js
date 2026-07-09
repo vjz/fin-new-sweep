@@ -477,6 +477,10 @@
     const quality = data.quality || {};
     const durval = data.durabilityValuation || {};
     const durvalRange = durval.available ? `${compactMoney(durval.rangeLow)}-${compactMoney(durval.rangeHigh)}` : '--';
+    const durvalNotes = (durval.notes || []).filter(Boolean);
+    const durvalInputNote = durvalNotes.length
+      ? `<div class="note">Durval inputs: ${escapeHtml(durvalNotes.join('; '))}</div>`
+      : '';
     const tradingStats = data.tradingStats || {};
     const offHigh = tradingStats.offFiftyTwoWeekHighPct == null
       ? '-- from high'
@@ -594,6 +598,7 @@
       <div class="note">Latest quote uses Yahoo chart metadata/daily close and is cached up to 5 minutes; it is not guaranteed real-time.</div>
       <div class="note">Sales shown in $B. EPS is GAAP diluted EPS from SEC data, not adjusted analyst EPS. Relative strength is raw price performance vs SPY.</div>
       <div class="note">Durval estimates durability-implied market cap from sales run rate, sales growth, gross margin, and a quality/durability multiplier. It is scenario math, not a target price; it can be wrong when margins, growth, cyclicality, or source data are stale or abnormal.</div>
+      ${durvalInputNote}
       ${warnings}`;
   }
 
