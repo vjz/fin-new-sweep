@@ -486,6 +486,11 @@ function latestSecValue(companyfacts, tags, units, namespace = 'dei') {
   return latest;
 }
 
+function latestSharesOutstanding(companyfacts) {
+  return latestSecValue(companyfacts, ['EntityCommonStockSharesOutstanding'], ['shares'], 'dei')
+    || latestSecValue(companyfacts, ['CommonStockSharesOutstanding'], ['shares'], 'us-gaap');
+}
+
 function chartMeta(chart) {
   return chart?.chart?.result?.[0]?.meta || {};
 }
@@ -1226,7 +1231,7 @@ async function buildFundamentals(ticker, request, env, startYear) {
   }
   const facts = factsResult.data;
   const submission = submissionsResult.data || {};
-  const shares = latestSecValue(facts, ['EntityCommonStockSharesOutstanding'], ['shares']);
+  const shares = latestSharesOutstanding(facts);
   const price = cleanNumber(meta.regularMarketPrice);
   const sharesOutstanding = shares?.val ?? cleanNumber(meta.sharesOutstanding);
   const marketCap = cleanNumber(meta.marketCap) ?? (price != null && sharesOutstanding != null ? price * sharesOutstanding : null);
