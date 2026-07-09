@@ -391,6 +391,39 @@ async function fetchChart(ticker, env, range = '5d') {
   }
 }
 
+async function fetchYahooMarketCap(ticker, env) {
+  const block = await kvGet(env, 'yahoo:blocked_until');
+  if (block && Number(block) > Date.now()) {
+    throw new Error('Yahoo refresh deferred');
+  }
+
+  try {
+    return await cachedJson(env, `yahoo:market-cap:${ticker}:v1`, TTL.chart, async () => {
+      const end = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60;
+      const start = end - 400 * 24 * 60 * 60;
+      const url = `https://query1.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/${encodeURIComponent(ticker)}?type=trailingMarketCap&period1=${start}&period2=${end}`;
+      return fetchJson(url, {
+        headers: { accept: 'application/json', 'user-agent': YAHOO_UA },
+        cf: { cacheTtl: TTL.chart, cacheEverything: true },
+      });
+    });
+  } catch (err) {
+    if ([403, 429, 500, 502, 503, 504].includes(err.status)) {
+      await kvPut(env, 'yahoo:blocked_until', String(Date.now() + TTL.blocked * 1000), TTL.blocked);
+    }
+    throw err;
+  }
+}
+
+function latestYahooMarketCap(data) {
+  const values = data?.timeseries?.result?.[0]?.trailingMarketCap || [];
+  for (const row of [...values].reverse()) {
+    const value = cleanNumber(row?.reportedValue?.raw);
+    if (value != null) return { value, asOfDate: row.asOfDate || '' };
+  }
+  return null;
+}
+
 async function fetchCompanyfacts(cik, env) {
   return cachedJson(env, `sec:companyfacts:${cik}:v1`, TTL.companyfacts, async () => {
     const padded = String(cik).padStart(10, '0');
@@ -1234,7 +1267,20 @@ async function buildFundamentals(ticker, request, env, startYear) {
   const shares = latestSharesOutstanding(facts);
   const price = cleanNumber(meta.regularMarketPrice);
   const sharesOutstanding = shares?.val ?? cleanNumber(meta.sharesOutstanding);
-  const marketCap = cleanNumber(meta.marketCap) ?? (price != null && sharesOutstanding != null ? price * sharesOutstanding : null);
+  let marketCap = cleanNumber(meta.marketCap);
+  if (marketCap == null) {
+    try {
+      const marketCapResult = await fetchYahooMarketCap(ticker, env);
+      const marketCapItem = latestYahooMarketCap(marketCapResult.data);
+      marketCap = marketCapItem?.value ?? null;
+      if (marketCap != null) {
+        warnings.push(`Market cap from Yahoo fundamentals-timeseries${marketCapItem.asOfDate ? ` ${marketCapItem.asOfDate}` : ''}.`);
+      }
+    } catch (err) {
+      warnings.push(`Yahoo market cap fallback unavailable: ${err.message}`);
+    }
+  }
+  if (marketCap == null && price != null && sharesOutstanding != null) marketCap = price * sharesOutstanding;
   const industry = submission.sicDescription || '--';
   const displayName = meta.longName || meta.shortName || submission.name || facts?.entityName || ticker;
   const summary = descriptionResult.data.summary
