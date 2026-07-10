@@ -98,13 +98,15 @@
   }
 
   function fmtMoney(value) {
-    if (value == null) return '--';
-    return `$${Number(value).toFixed(2)}`;
+    const num = Number(value);
+    if (value == null || !Number.isFinite(num)) return '--';
+    return `$${num.toFixed(2)}`;
   }
 
   function fmtInt(value) {
-    if (value == null) return '--';
-    return Math.round(Number(value)).toLocaleString();
+    const num = Number(value);
+    if (value == null || !Number.isFinite(num)) return '--';
+    return Math.round(num).toLocaleString();
   }
 
   function fmtQuoteNumber(value) {
@@ -387,14 +389,15 @@
     if (!data?.success) {
       return '<div class="options-empty">Options activity unavailable.</div>';
     }
-    if (!data.data?.length) {
+    const contracts = Array.isArray(data.data) ? data.data.filter(Boolean) : [];
+    if (!contracts.length) {
       return `
         <div class="options-empty">No notable latest-session flow.</div>
         <div class="options-note">${escapeHtml(data.note || 'Delayed/experimental options flow; not a buy/sell signal.')}</div>`;
     }
-    const rows = data.data.map((row) => `
+    const rows = contracts.map((row) => `
       <tr>
-        <td><span class="option-type ${optionFlowTone(row)}" title="${escapeHtml(row.direction || '')} ${escapeHtml(row.type || '')}">${escapeHtml(row.type)}</span></td>
+        <td><span class="option-type ${optionFlowTone(row)}" title="${escapeHtml(row.direction || '')} ${escapeHtml(row.type || '')}">${escapeHtml(row.type || '--')}</span></td>
         <td>${escapeHtml(row.expiration || '--')}</td>
         <td>${fmtMoney(row.strike)}</td>
         <td>${fmtMoney(row.last)}</td>
@@ -417,6 +420,27 @@
       <div class="options-note">${escapeHtml(data.note || 'Delayed/experimental options flow; not a buy/sell signal.')}</div>`;
   }
 
+  async function fetchOptionsActivity(ticker) {
+    const stamp = Date.now();
+    const paths = [
+      `/api/flow/${encodeURIComponent(ticker)}?t=${stamp}`,
+      `/api/options/${encodeURIComponent(ticker)}?t=${stamp}`,
+    ];
+    let fallback = null;
+    for (const path of paths) {
+      try {
+        const res = await fetch(path, { cache: 'no-store' });
+        const text = await res.text();
+        const data = text ? JSON.parse(text) : {};
+        if (res.ok && data?.success) return data;
+        fallback = data;
+      } catch (err) {
+        fallback = { success: false, error: err.message || 'Options activity unavailable' };
+      }
+    }
+    return fallback || { success: false };
+  }
+
   async function loadOptionsActivity(card) {
     if (!card || card.dataset.optionsLoaded === 'true' || card.dataset.optionsLoading === 'true') return;
     const ticker = cleanTicker(card.dataset.optionsTicker);
@@ -425,11 +449,7 @@
     card.dataset.optionsLoading = 'true';
     body.textContent = 'Loading options activity...';
     try {
-      const res = await fetch(`/api/options/${encodeURIComponent(ticker)}?t=${Date.now()}`, {
-        cache: 'no-store',
-        headers: { 'cache-control': 'no-cache' },
-      });
-      const data = await res.json().catch(() => ({}));
+      const data = await fetchOptionsActivity(ticker);
       body.innerHTML = renderOptionsActivity(data);
       card.dataset.optionsLoaded = 'true';
     } catch {
