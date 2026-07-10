@@ -425,7 +425,10 @@
     card.dataset.optionsLoading = 'true';
     body.textContent = 'Loading options activity...';
     try {
-      const res = await fetch(`/api/options/${encodeURIComponent(ticker)}`, { cache: 'no-store' });
+      const res = await fetch(`/api/options/${encodeURIComponent(ticker)}?t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'cache-control': 'no-cache' },
+      });
       const data = await res.json().catch(() => ({}));
       body.innerHTML = renderOptionsActivity(data);
       card.dataset.optionsLoaded = 'true';

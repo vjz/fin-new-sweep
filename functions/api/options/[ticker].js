@@ -16,6 +16,17 @@ function json(data, init = {}) {
   });
 }
 
+function uncachedJson(data, init = {}) {
+  return json(data, {
+    ...init,
+    headers: {
+      'cache-control': 'no-store, max-age=0',
+      'x-robots-tag': 'noindex',
+      ...(init.headers || {}),
+    },
+  });
+}
+
 function safeTicker(raw) {
   return String(raw || '').trim().toUpperCase().replace(/[^A-Z0-9.-]/g, '').slice(0, 16);
 }
@@ -227,7 +238,7 @@ export async function onRequestGet(context) {
   const ticker = safeTicker(params.ticker);
   if (!ticker) return json({ success: false, error: 'ticker required' }, { status: 400 });
 
-  const cacheKey = `options:activity:${ticker}:v1`;
+  const cacheKey = `options:activity:${ticker}:v2`;
   const cached = await kvGet(env, cacheKey);
   if (cached) {
     try {
@@ -245,7 +256,7 @@ export async function onRequestGet(context) {
     if ([403, 429, 500, 502, 503, 504].includes(err.status)) {
       await kvPut(env, 'options:blocked_until', String(Date.now() + TTL.blocked * 1000), TTL.blocked);
     }
-    return json({
+    return uncachedJson({
       success: false,
       ticker,
       error: 'Options activity unavailable',
