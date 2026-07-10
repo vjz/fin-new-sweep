@@ -25,8 +25,6 @@ from zoneinfo import ZoneInfo
 ROOT = "/home/vjshrike/clawd"
 INBOX = os.path.join(ROOT, "store/news-sweep/inbox.json")
 NEWS_SWEEP_CLI = os.path.join(ROOT, "scripts/news_sweep_cli.py")
-EARNINGS_NEXT = os.path.join(ROOT, "store/status/earnings-next.json")
-EARNINGS_FACTS_DIR = os.path.join(ROOT, "store/earnings/facts")
 
 SITE_TITLE = os.getenv("FIN_NEWS_SWEEP_TITLE", "Market Sweep")
 BASE_URL = os.getenv("FIN_NEWS_SWEEP_BASE_URL", "https://fin-new-sweep.pages.dev").rstrip("/")
@@ -49,15 +47,6 @@ def read_inbox() -> dict:
     with open(INBOX, "r", encoding="utf-8") as f:
         obj = json.load(f)
     return obj if isinstance(obj, dict) else {}
-
-
-def read_json(path: str, default):
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            obj = json.load(f)
-        return obj
-    except Exception:
-        return default
 
 
 def run_summary() -> str:
@@ -175,151 +164,6 @@ def map_title_to_link(items: list[dict]) -> dict[str, dict]:
     return m
 
 
-def fmt_money(obj: dict) -> str:
-    val = obj.get("reported")
-    unit = str(obj.get("unit") or "").replace("USD_", "")
-    if val is None:
-        return ""
-    suffix = ""
-    if unit.lower() == "billion":
-        suffix = "B"
-    elif unit.lower() == "million":
-        suffix = "M"
-    try:
-        return f"${float(val):g}{suffix}"
-    except Exception:
-        return f"${val}{suffix}"
-
-
-def first_sec_doc(obj: dict) -> str:
-    srcs = obj.get("sources")
-    if not isinstance(srcs, list):
-        return ""
-    for src in srcs:
-        if isinstance(src, dict) and src.get("type") == "sec_doc":
-            return str(src.get("url") or "").strip()
-    return ""
-
-
-def facts_summary(obj: dict) -> str:
-    parts: list[str] = []
-    rev = obj.get("revenue")
-    if isinstance(rev, dict):
-        txt = fmt_money(rev)
-        if txt:
-            parts.append(f"Rev {txt}")
-    eps = obj.get("eps")
-    if isinstance(eps, dict) and eps.get("adjustedDiluted") is not None:
-        try:
-            parts.append(f"EPS ${float(eps.get('adjustedDiluted')):g}")
-        except Exception:
-            parts.append(f"EPS ${eps.get('adjustedDiluted')}")
-    graw = obj.get("guidanceRaw")
-    if isinstance(graw, list) and graw:
-        parts.append(str(graw[0]).strip())
-    move = obj.get("stockMove")
-    if isinstance(move, dict) and move.get("pct") is not None:
-        parts.append(f"Move {move.get('pct')}%")
-    return " | ".join([p for p in parts if p])
-
-
-def load_latest_facts() -> list[dict]:
-    if not os.path.isdir(EARNINGS_FACTS_DIR):
-        return []
-    rows: list[dict] = []
-    for day in os.listdir(EARNINGS_FACTS_DIR):
-        try:
-            dt.date.fromisoformat(day)
-        except Exception:
-            continue
-        day_dir = os.path.join(EARNINGS_FACTS_DIR, day)
-        if not os.path.isdir(day_dir):
-            continue
-        for name in os.listdir(day_dir):
-            if not name.endswith(".json"):
-                continue
-            obj = read_json(os.path.join(day_dir, name), {})
-            if isinstance(obj, dict) and obj.get("ticker"):
-                rows.append(obj)
-    rows.sort(key=lambda x: str(x.get("reportedAt") or x.get("scheduledFor") or ""), reverse=True)
-    return rows
-
-
-def render_earnings_panel(now_utc: dt.datetime) -> str:
-    def esc(s: str) -> str:
-        return html.escape(s or "")
-
-    la = ZoneInfo("America/Los_Angeles")
-    today = now_utc.astimezone(la).date()
-    end = today + dt.timedelta(days=6)
-    recent_start = today - dt.timedelta(days=7)
-
-    next_obj = read_json(EARNINGS_NEXT, {})
-    next_map = next_obj.get("next") if isinstance(next_obj, dict) else {}
-    upcoming: list[tuple[dt.date, str, str, str]] = []
-    if isinstance(next_map, dict):
-        for ticker, ev in next_map.items():
-            if not isinstance(ev, dict):
-                continue
-            try:
-                d = dt.date.fromisoformat(str(ev.get("date") or ""))
-            except Exception:
-                continue
-            if today <= d <= end:
-                upcoming.append((
-                    d,
-                    str(ticker).strip().upper(),
-                    str(ev.get("time") or "UNKNOWN").strip() or "UNKNOWN",
-                    str(ev.get("name") or "").strip(),
-                ))
-    upcoming.sort(key=lambda x: (x[0], x[1]))
-
-    reported: list[dict] = []
-    for obj in load_latest_facts():
-        try:
-            d = dt.date.fromisoformat(str(obj.get("reportedAt") or obj.get("scheduledFor") or ""))
-        except Exception:
-            continue
-        if recent_start <= d <= today:
-            reported.append(obj)
-    reported = reported[:8]
-
-    if not upcoming and not reported:
-        return ""
-
-    lines: list[str] = []
-    if upcoming:
-        buckets: dict[str, list[str]] = {}
-        for d, ticker, when, _name in upcoming:
-            label = d.strftime("%a")
-            buckets.setdefault(label, []).append(f"{ticker} {when}")
-        items = [f"{day}: {', '.join(vals)}" for day, vals in buckets.items()]
-        lines.append(f"<div>Upcoming: {' | '.join(esc(x) for x in items)}</div>")
-
-    for obj in reported:
-        ticker = str(obj.get("ticker") or "").strip().upper()
-        rep = str(obj.get("reportedAt") or "").strip()
-        summary = facts_summary(obj)
-        link = first_sec_doc(obj)
-        label = f"{ticker} {rep}".strip()
-        if link:
-            label = f"<a href=\"{esc(link)}\" target=\"_blank\" rel=\"noopener noreferrer\">{esc(label)}</a>"
-        else:
-            label = esc(label)
-        if summary:
-            lines.append(f"<div>{label}: {esc(summary)}</div>")
-        else:
-            lines.append(f"<div>{label}: cached filing, metrics pending</div>")
-
-    return f"""
-  <div class=\"card\" style=\"margin-bottom:16px\">
-    <div style=\"font-size:14px; font-weight:600; margin-bottom:6px;\">This Week's Earnings</div>
-    <div style=\"font-size:13px; line-height:1.5;\">{''.join(lines)}</div>
-  </div>
-"""
-
-
-
 EARNINGS_TERMS = re.compile(
     r"\b(earnings?|eps|revenue|sales miss|sales beat|results?|quarterly|q[1-4]|fy\d{2,4}|guidance|buyback|transcript)\b",
     re.IGNORECASE,
@@ -427,8 +271,6 @@ def html_page(*, generated_at: str, summary_text: str, items: list[dict], now_ut
             )
         story_html = "".join(blocks)
 
-    earnings_panel = render_earnings_panel(now_utc)
-
     return f"""<!doctype html>
 <html lang=\"en\">
 <head>
@@ -483,8 +325,6 @@ def html_page(*, generated_at: str, summary_text: str, items: list[dict], now_ut
     <div id=\"dashboard-lines\" style=\"font-size:13px; line-height:1.5;\">(loading)</div>
     <div id=\"dashboard-regime\" style=\"margin-top:6px; font-size:13px; font-weight:600;\">Regime: —</div>
   </div>
-
-{earnings_panel}
 
   <div class=\"grid\">
     <div class=\"card\">
