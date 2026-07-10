@@ -24,8 +24,8 @@ export async function onRequestGet({ request }) {
   const isFuture = symbol.endsWith('=F');
   const range = isFuture ? '1d' : '5d';
   const interval = isFuture ? '1m' : '1d';
-  const yahoo = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=${interval}&includePrePost=true`;
-  const res = await fetch(yahoo, {
+  const providerUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=${interval}&includePrePost=true`;
+  const res = await fetch(providerUrl, {
     headers: {
       'accept': 'application/json',
       'user-agent': 'Mozilla/5.0 fin-news-sweep',
@@ -44,7 +44,7 @@ export async function onRequestGet({ request }) {
   const last = Number(meta.regularMarketPrice ?? closes.at(-1));
   // For stocks/ETFs, chartPreviousClose on range=5d is the close before the
   // requested range, so use the last two daily closes. For futures, use a 1d
-  // intraday chart where Yahoo exposes the prior settlement as previousClose.
+  // intraday chart where the provider exposes the prior settlement as previousClose.
   const prev = Number(
     isFuture
       ? (meta.previousClose ?? meta.chartPreviousClose)

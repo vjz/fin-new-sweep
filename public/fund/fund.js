@@ -97,6 +97,16 @@
     return `$${Number(value).toFixed(value >= 100 ? 0 : 2)}`;
   }
 
+  function fmtMoney(value) {
+    if (value == null) return '--';
+    return `$${Number(value).toFixed(2)}`;
+  }
+
+  function fmtInt(value) {
+    if (value == null) return '--';
+    return Math.round(Number(value)).toLocaleString();
+  }
+
   function fmtQuoteNumber(value) {
     if (value == null) return '--';
     return Number(value).toFixed(2);
@@ -350,6 +360,82 @@
       </div>`;
   }
 
+  function renderOptionsCard(ticker) {
+    return `
+      <details class="section options-card" data-options-ticker="${escapeHtml(ticker)}">
+        <summary class="options-summary">
+          <div>
+            <div class="section-title">Options Activity</div>
+            <div class="section-subtitle">Top unusual contracts for this ticker</div>
+          </div>
+          <span class="options-action">Show flow</span>
+        </summary>
+        <div class="options-body">Open to load delayed options flow.</div>
+      </details>`;
+  }
+
+  function optionFlowTone(row) {
+    const type = String(row?.type || '').toUpperCase();
+    const direction = String(row?.direction || '').toLowerCase();
+    if ((type === 'CALL' && direction === 'buying') || (type === 'PUT' && direction === 'selling')) return 'green';
+    if (type === 'PUT' && direction === 'buying') return 'red';
+    if (type === 'CALL' && direction === 'selling') return 'yellow';
+    return 'neutral';
+  }
+
+  function renderOptionsActivity(data) {
+    if (!data?.success) {
+      return '<div class="options-empty">Options activity unavailable.</div>';
+    }
+    if (!data.data?.length) {
+      return `
+        <div class="options-empty">No notable latest-session flow.</div>
+        <div class="options-note">${escapeHtml(data.note || 'Delayed/experimental options flow; not a buy/sell signal.')}</div>`;
+    }
+    const rows = data.data.map((row) => `
+      <tr>
+        <td><span class="option-type ${optionFlowTone(row)}" title="${escapeHtml(row.direction || '')} ${escapeHtml(row.type || '')}">${escapeHtml(row.type)}</span></td>
+        <td>${escapeHtml(row.expiration || '--')}</td>
+        <td>${fmtMoney(row.strike)}</td>
+        <td>${fmtMoney(row.last)}</td>
+        <td>${fmtInt(row.volume)}</td>
+        <td>${fmtInt(row.openInterest)}</td>
+      </tr>`).join('');
+    return `
+      <div class="options-status">
+        <span class="status-chip">${escapeHtml(data.tone || 'options flow')}</span>
+        ${data.sessionDate ? `<span class="status-chip">Latest session ${escapeHtml(data.sessionDate)}</span>` : ''}
+      </div>
+      <div class="table-wrap options-table">
+        <table>
+          <thead>
+            <tr><th>Type</th><th>Exp</th><th>Strike</th><th>Last</th><th>Vol</th><th>OI</th></tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <div class="options-note">${escapeHtml(data.note || 'Delayed/experimental options flow; not a buy/sell signal.')}</div>`;
+  }
+
+  async function loadOptionsActivity(card) {
+    if (!card || card.dataset.optionsLoaded === 'true' || card.dataset.optionsLoading === 'true') return;
+    const ticker = cleanTicker(card.dataset.optionsTicker);
+    const body = card.querySelector('.options-body');
+    if (!ticker || !body) return;
+    card.dataset.optionsLoading = 'true';
+    body.textContent = 'Loading options activity...';
+    try {
+      const res = await fetch(`/api/options/${encodeURIComponent(ticker)}`, { cache: 'no-store' });
+      const data = await res.json().catch(() => ({}));
+      body.innerHTML = renderOptionsActivity(data);
+      card.dataset.optionsLoaded = 'true';
+    } catch {
+      body.innerHTML = '<div class="options-empty">Options activity unavailable.</div>';
+    } finally {
+      card.dataset.optionsLoading = 'false';
+    }
+  }
+
   function setBusy(isBusy) {
     button.disabled = isBusy;
     input.disabled = isBusy;
@@ -405,6 +491,7 @@
     ].filter(Boolean).join(' • ');
     const quoteInline = renderQuote(data.quote);
     const chartSection = renderTechnicalChart(data.technicalChart);
+    const optionsSection = renderOptionsCard(data.ticker);
     const description = renderDescription(data.summary);
     const secForms = data.asOf?.secFactForms || '10-K / 10-Q';
     const latestQuarter = [...(data.quarterlyRows || [])].reverse().find((row) => row.end || row.filed);
@@ -485,6 +572,7 @@
       </div>
 
       ${chartSection}
+      ${optionsSection}
 
       ${qualitySection}
 
@@ -506,8 +594,8 @@
       ${quarterlySection}
       ${rsSection}
 
-      <div class="note">Data: Yahoo quote/chart ${firstDate(data.asOf?.yahooChart)}; SEC ${escapeHtml(secForms)} facts ${firstDate(data.asOf?.secFacts)}; description ${escapeHtml(data.summarySource || 'n/a')}</div>
-      <div class="note">Latest quote uses Yahoo chart metadata/daily close and is cached up to 5 minutes; it is not guaranteed real-time.</div>
+      <div class="note">Data: market quote/chart ${firstDate(data.asOf?.marketChart)}; SEC ${escapeHtml(secForms)} facts ${firstDate(data.asOf?.secFacts)}; description ${escapeHtml(data.summarySource || 'n/a')}</div>
+      <div class="note">Latest quote uses market data provider chart metadata/daily close and is cached up to 5 minutes; it is not guaranteed real-time.</div>
       <div class="note">Sales shown in $B. EPS is GAAP diluted EPS from SEC data, not adjusted analyst EPS. Relative strength is raw price performance vs SPY.</div>
       <div class="note">Durval estimates durability-implied market cap from sales run rate, sales growth, gross margin, and a quality/durability multiplier. It is scenario math, not a target price; it can be wrong when margins, growth, cyclicality, or source data are stale or abnormal.</div>
       ${durvalInputNote}
@@ -595,6 +683,13 @@
       return;
     }
 
+    const summary = event.target.closest('.options-summary');
+    if (summary) {
+      const card = summary.closest('.options-card');
+      setTimeout(() => {
+        if (card?.open) loadOptionsActivity(card);
+      }, 0);
+    }
   });
 
   window.addEventListener('popstate', () => {

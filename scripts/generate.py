@@ -322,7 +322,7 @@ def html_page(*, generated_at: str, summary_text: str, items: list[dict], now_ut
 
   <div class=\"card\" style=\"margin-bottom:16px\">
     <div style=\"font-size:14px; font-weight:600; margin-bottom:2px;\">Market Pulse</div>
-    <div id=\"dashboard-time\" style=\"font-size:12px; opacity:0.75; margin-bottom:6px;\">Loading live Yahoo Finance data…</div>
+    <div id=\"dashboard-time\" style=\"font-size:12px; opacity:0.75; margin-bottom:6px;\">Loading live market data...</div>
     <div id=\"dashboard-lines\" style=\"font-size:13px; line-height:1.5;\">(loading)</div>
     <div id=\"dashboard-regime\" style=\"margin-top:6px; font-size:13px; font-weight:600;\">Regime: —</div>
   </div>

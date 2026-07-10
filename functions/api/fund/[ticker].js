@@ -1,5 +1,5 @@
 const SEC_UA = 'fin-new-sweep/1.0 dealzen.km@gmail.com';
-const YAHOO_UA = 'Mozilla/5.0 fin-new-sweep fund endpoint';
+const PROVIDER_UA = 'Mozilla/5.0 fin-new-sweep fund endpoint';
 const SEC_COMPANY_TICKERS_URL = 'https://www.sec.gov/files/company_tickers.json';
 
 const TTL = {
@@ -372,14 +372,14 @@ async function resolveCik(ticker, request, env, warnings) {
 async function fetchChart(ticker, env, range = '5d') {
   const block = await kvGet(env, 'yahoo:blocked_until');
   if (block && Number(block) > Date.now()) {
-    throw new Error('Yahoo refresh deferred');
+    throw new Error('Market data refresh deferred');
   }
 
   try {
     return await cachedJson(env, `yahoo:chart:${ticker}:${range}:v1`, TTL.chart, async () => {
       const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=${encodeURIComponent(range)}&interval=1d`;
       return fetchJson(url, {
-        headers: { accept: 'application/json', 'user-agent': YAHOO_UA },
+        headers: { accept: 'application/json', 'user-agent': PROVIDER_UA },
         cf: { cacheTtl: TTL.chart, cacheEverything: true },
       });
     });
@@ -391,10 +391,10 @@ async function fetchChart(ticker, env, range = '5d') {
   }
 }
 
-async function fetchYahooMarketCap(ticker, env) {
+async function fetchProviderMarketCap(ticker, env) {
   const block = await kvGet(env, 'yahoo:blocked_until');
   if (block && Number(block) > Date.now()) {
-    throw new Error('Yahoo refresh deferred');
+    throw new Error('Market data refresh deferred');
   }
 
   try {
@@ -403,7 +403,7 @@ async function fetchYahooMarketCap(ticker, env) {
       const start = end - 400 * 24 * 60 * 60;
       const url = `https://query1.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/${encodeURIComponent(ticker)}?type=trailingMarketCap&period1=${start}&period2=${end}`;
       return fetchJson(url, {
-        headers: { accept: 'application/json', 'user-agent': YAHOO_UA },
+        headers: { accept: 'application/json', 'user-agent': PROVIDER_UA },
         cf: { cacheTtl: TTL.chart, cacheEverything: true },
       });
     });
@@ -415,7 +415,7 @@ async function fetchYahooMarketCap(ticker, env) {
   }
 }
 
-function latestYahooMarketCap(data) {
+function latestProviderMarketCap(data) {
   const values = data?.timeseries?.result?.[0]?.trailingMarketCap || [];
   for (const row of [...values].reverse()) {
     const value = cleanNumber(row?.reportedValue?.raw);
@@ -598,7 +598,7 @@ function buildQuote(meta, chart) {
     marketState: meta.marketState || '',
     exchangeTimezoneName: meta.exchangeTimezoneName || '',
     regularMarketTime: meta.regularMarketTime ? new Date(meta.regularMarketTime * 1000).toISOString() : null,
-    source: 'Yahoo chart metadata / daily close',
+    source: 'Market data provider chart metadata / daily close',
     cacheTtlSeconds: TTL.chart,
   };
 }
@@ -1126,7 +1126,7 @@ function buildDurabilityValuation(ticker, quality, quarterlyRows, annualRows, ma
 function renderFundTable(data) {
   const description = truncate(data.summary || data.name || '', 520) || '--';
   const sourceBits = [
-    data.asOf.yahooChart ? `Yahoo ${data.asOf.yahooChart.slice(0, 10)}` : '',
+    data.asOf.marketChart ? `Market data ${data.asOf.marketChart.slice(0, 10)}` : '',
     data.asOf.secFacts ? `SEC facts ${data.asOf.secFacts}` : '',
     data.summarySource ? `desc ${data.summarySource}` : '',
   ].filter(Boolean);
@@ -1164,7 +1164,7 @@ function renderFundTable(data) {
       : '',
     '',
     sourceBits.length ? `Data: ${sourceBits.join('; ')}` : '',
-    'Quote note: Yahoo chart metadata/daily close, cached up to 5 minutes; not guaranteed real-time.',
+    'Quote note: market data provider chart metadata/daily close, cached up to 5 minutes; not guaranteed real-time.',
     'Note: EPS is GAAP diluted EPS from SEC data, not adjusted analyst EPS.',
     'Durval: durability-implied market cap from sales run rate, sales growth, gross margin, and quality/durability multipliers; scenario math, not a target price.',
     'Durval limits: can be wrong when margins, growth, cyclicality, or source data are stale or abnormal.',
@@ -1223,7 +1223,7 @@ async function buildFundamentals(ticker, request, env, startYear) {
     chart = chartResult.data;
     chartCache = chartResult.cache;
   } catch (err) {
-    warnings.push(`Yahoo chart unavailable: ${err.message}`);
+    warnings.push(`Market chart unavailable: ${err.message}`);
   }
   try {
     const benchmarkResult = await fetchChart('SPY', env, '1y');
@@ -1270,14 +1270,14 @@ async function buildFundamentals(ticker, request, env, startYear) {
   let marketCap = cleanNumber(meta.marketCap);
   if (marketCap == null) {
     try {
-      const marketCapResult = await fetchYahooMarketCap(ticker, env);
-      const marketCapItem = latestYahooMarketCap(marketCapResult.data);
+      const marketCapResult = await fetchProviderMarketCap(ticker, env);
+      const marketCapItem = latestProviderMarketCap(marketCapResult.data);
       marketCap = marketCapItem?.value ?? null;
       if (marketCap != null) {
-        warnings.push(`Market cap from Yahoo fundamentals-timeseries${marketCapItem.asOfDate ? ` ${marketCapItem.asOfDate}` : ''}.`);
+        warnings.push(`Market cap from third-party market data${marketCapItem.asOfDate ? ` ${marketCapItem.asOfDate}` : ''}.`);
       }
     } catch (err) {
-      warnings.push(`Yahoo market cap fallback unavailable: ${err.message}`);
+      warnings.push(`Market cap fallback unavailable: ${err.message}`);
     }
   }
   if (marketCap == null && price != null && sharesOutstanding != null) marketCap = price * sharesOutstanding;
@@ -1291,7 +1291,7 @@ async function buildFundamentals(ticker, request, env, startYear) {
     || submission.description
     || (cik && facts
       ? `${displayName} is an SEC filer in ${industry}.`
-      : `${displayName} has Yahoo quote/chart coverage, but ${cik ? 'SEC companyfacts are unavailable' : 'no SEC CIK mapping was found'}, so SEC-backed financial statement fields are unavailable.`);
+      : `${displayName} has market quote/chart coverage, but ${cik ? 'SEC companyfacts are unavailable' : 'no SEC CIK mapping was found'}, so SEC-backed financial statement fields are unavailable.`);
   const rows = buildRows(facts, startYear);
   const quarterlyRows = buildQuarterlyRows(facts, submission.fiscalYearEnd);
   const quality = buildQuality(facts, marketCap, price);
@@ -1306,7 +1306,7 @@ async function buildFundamentals(ticker, request, env, startYear) {
     phone: submission.phone || '--',
     website: submission.website || submission.investorWebsite || '--',
     summary,
-    summarySource: descriptionResult.data.source || (submission.description ? 'SEC submissions' : facts ? 'SEC profile fallback' : 'Yahoo chart / SEC facts unavailable'),
+    summarySource: descriptionResult.data.source || (submission.description ? 'SEC submissions' : facts ? 'SEC profile fallback' : 'Market chart / SEC facts unavailable'),
     price,
     quote: buildQuote(meta, chart),
     marketCap,
@@ -1321,14 +1321,14 @@ async function buildFundamentals(ticker, request, env, startYear) {
     warnings,
     cache: {
       cikMap: cikResult.cache,
-      yahooChart: chartCache,
+      marketChart: chartCache,
       benchmarkChart: benchmarkCache,
       secCompanyfacts: factsResult.cache,
       secSubmissions: submissionsResult.cache,
       secBusinessDescription: descriptionResult.cache,
     },
     asOf: {
-      yahooChart: meta.regularMarketTime ? new Date(meta.regularMarketTime * 1000).toISOString() : null,
+      marketChart: meta.regularMarketTime ? new Date(meta.regularMarketTime * 1000).toISOString() : null,
       secFacts: shares?.end || null,
       secProfile: descriptionResult.data.filingDate || null,
       secFactForms: facts ? (rows.some((row) => row.salesSource?.includes('20-F') || row.epsSource?.includes('20-F')) ? '20-F / 6-K' : '10-K / 10-Q') : '--',

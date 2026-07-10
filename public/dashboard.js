@@ -74,7 +74,7 @@
 
     document.getElementById('dashboard-lines').innerHTML = lines.join('');
     document.getElementById('dashboard-regime').textContent = `Regime: ${regime(moves)}`;
-    document.getElementById('dashboard-time').textContent = `Live via Yahoo Finance proxy • ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles', timeZoneName: 'short' })}`;
+    document.getElementById('dashboard-time').textContent = `Live market data • ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles', timeZoneName: 'short' })}`;
   }
 
   async function main() {
@@ -94,7 +94,7 @@
 
   main().catch(() => {
     document.getElementById('dashboard-time').textContent = 'Live dashboard unavailable';
-    document.getElementById('dashboard-lines').textContent = '(Yahoo Finance request failed)';
+    document.getElementById('dashboard-lines').textContent = '(market data request failed)';
     document.getElementById('dashboard-regime').textContent = 'Regime: —';
   });
 })();
