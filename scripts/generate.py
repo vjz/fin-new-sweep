@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Generate the public static page from the local OpenClaw news-sweep inbox.
+"""Generate the public static page from the local news-sweep inbox.
 
 Inputs (read-only):
-- /home/vjshrike/clawd/store/news-sweep/inbox.json
+- <workspace>/store/news-sweep/inbox.json
 - (optional) stdout of news_sweep_cli.py summary --from-inbox
 
 Output:
@@ -19,18 +19,19 @@ import json
 import os
 import re
 import subprocess
+from pathlib import Path
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
-ROOT = "/home/vjshrike/clawd"
+ROOT = str(Path(__file__).resolve().parents[3])
 INBOX = os.path.join(ROOT, "store/news-sweep/inbox.json")
 NEWS_SWEEP_CLI = os.path.join(ROOT, "scripts/news_sweep_cli.py")
 
 SITE_TITLE = os.getenv("FIN_NEWS_SWEEP_TITLE", "Market Sweep")
-BASE_URL = os.getenv("FIN_NEWS_SWEEP_BASE_URL", "https://fin-new-sweep.pages.dev").rstrip("/")
+BASE_URL = os.getenv("FIN_NEWS_SWEEP_BASE_URL", "https://markets.dealzen.ai").rstrip("/")
 TOP_N = int(os.getenv("FIN_NEWS_SWEEP_TOP_N", "20"))
 NEW_HOURS = float(os.getenv("FIN_NEWS_SWEEP_NEW_HOURS", "6"))
-ASSET_VERSION = "20260615-0716"
+ASSET_VERSION = "20260710-1155"
 
 # Mark paywalled domains (keep links, but label).
 PAYWALLED = {
@@ -339,6 +340,10 @@ def html_page(*, generated_at: str, summary_text: str, items: list[dict], now_ut
       </ul>
     </div>
   </div>
+  <footer class="site-footer">
+    <span>Market Sweep is informational only, not investment advice.</span>
+    <a href="/legal/">Privacy, terms, and data notes</a>
+  </footer>
   </main>
   <script src="/app.js?v={ASSET_VERSION}" defer></script>
   <script src="dashboard.js?v=20260512-0110" defer></script>
@@ -387,6 +392,7 @@ def main() -> int:
             "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n"
             f"  <url>\n    <loc>{BASE_URL}/</loc>\n    <lastmod>{now_utc.date().isoformat()}</lastmod>\n  </url>\n"
             f"  <url>\n    <loc>{BASE_URL}/fund/</loc>\n    <lastmod>{now_utc.date().isoformat()}</lastmod>\n  </url>\n"
+            f"  <url>\n    <loc>{BASE_URL}/legal/</loc>\n    <lastmod>{now_utc.date().isoformat()}</lastmod>\n  </url>\n"
             "</urlset>\n"
         )
     else:

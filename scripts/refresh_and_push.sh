@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+ROOT="$(cd "$PROJECT_DIR/../.." && pwd)"
+
 # Refresh RSS inbox (local, private)
-python3 /home/vjshrike/clawd/scripts/news_sweep_cli.py fetch >/dev/null
+python3 "$ROOT/scripts/news_sweep_cli.py" fetch >/dev/null
 
 # Generate public static page
-cd /home/vjshrike/clawd/projects/fin-new-sweep
+cd "$PROJECT_DIR"
 python3 scripts/generate.py >/dev/null
 
 # Commit + push if changed

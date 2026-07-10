@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="/home/vjshrike/clawd"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+ROOT="$(cd "$PROJECT_DIR/../.." && pwd)"
+export ROOT
 OUT="$ROOT/store/ohlcv/yfinance/1y-1d"
 CACHE_YF="$ROOT/projects/ibd-cache-yf/cache_yf.py"
 
@@ -25,12 +28,14 @@ done
 
 mkdir -p "$ROOT/store/status"
 python3 - <<'PY'
-import json, datetime as dt
-path = "/home/vjshrike/clawd/store/status/cross-asset-dashboard.json"
+import datetime as dt
+import json
+import os
+path = os.path.join(os.environ["ROOT"], "store/status/cross-asset-dashboard.json")
 obj = {"refreshed_at": dt.datetime.now(dt.timezone.utc).isoformat().replace('+00:00','Z')}
 open(path, 'w', encoding='utf-8').write(json.dumps(obj, indent=2))
 PY
 
-FIN_NEWS_SWEEP_BASE_URL=https://fin-new-sweep.pages.dev \
+FIN_NEWS_SWEEP_BASE_URL=https://markets.dealzen.ai \
 FIN_NEWS_SWEEP_NEW_HOURS=4 \
-  "$ROOT/projects/fin-new-sweep/scripts/refresh_and_push.sh"
+  "$PROJECT_DIR/scripts/refresh_and_push.sh"

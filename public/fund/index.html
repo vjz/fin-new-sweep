@@ -3,9 +3,18 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Fundamentals — Market Sweep</title>
-  <meta name="description" content="SEC-backed fundamentals table with cached Cloudflare Pages endpoint." />
-  <link rel="stylesheet" href="/app.css?v=20260615-0716" />
+  <title>Stock Research — Market Sweep</title>
+  <meta name="description" content="Stock research pages with SEC-backed fundamentals, price trend, relative strength, and market data notes." />
+  <meta property="og:title" content="Stock Research — Market Sweep" />
+  <meta property="og:description" content="SEC-backed fundamentals, price trend, relative strength, and market data notes." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://markets.dealzen.ai/fund/" />
+  <meta property="og:site_name" content="Market Sweep" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Stock Research — Market Sweep" />
+  <meta name="twitter:description" content="SEC-backed fundamentals, price trend, relative strength, and market data notes." />
+  <link rel="canonical" href="https://markets.dealzen.ai/fund/" />
+  <link rel="stylesheet" href="/app.css?v=20260710-1155" />
   <style>
     :root {
       color-scheme: light;
@@ -504,86 +513,6 @@
       border-top: 2px dashed #217597;
       height: 0;
     }
-    .options-card {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #fbfcfa;
-    }
-    .options-card summary {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      cursor: pointer;
-      padding: 12px;
-      list-style: none;
-    }
-    .options-card summary::-webkit-details-marker {
-      display: none;
-    }
-    .options-action {
-      color: var(--accent);
-      font-size: 12px;
-      font-weight: 760;
-      white-space: nowrap;
-    }
-    .options-card[open] .options-action {
-      display: none;
-    }
-    .options-body {
-      border-top: 1px solid var(--line);
-      padding: 10px 12px 12px;
-      color: var(--muted);
-      font-size: 13px;
-    }
-    .options-status {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin-bottom: 8px;
-    }
-    .options-table {
-      background: #fff;
-    }
-    .options-table table {
-      min-width: 520px;
-      font-size: 13px;
-    }
-    .options-table th,
-    .options-table td {
-      padding: 8px 9px;
-    }
-    .option-type {
-      display: inline-flex;
-      align-items: center;
-      min-height: 22px;
-      padding: 0 7px;
-      border-radius: 999px;
-      font-size: 11px;
-      font-weight: 780;
-    }
-    .option-type.green {
-      background: #e9f5ef;
-      color: #14724f;
-    }
-    .option-type.red {
-      background: #f8ece9;
-      color: #a23a2f;
-    }
-    .option-type.yellow {
-      background: #fff4cf;
-      color: #8a5d00;
-    }
-    .option-type.neutral {
-      background: #eef1f3;
-      color: #51606a;
-    }
-    .options-note,
-    .options-empty {
-      color: var(--muted);
-      font-size: 12px;
-      margin-top: 8px;
-    }
     .table-wrap {
       overflow-x: auto;
       border: 1px solid var(--line);
@@ -686,11 +615,6 @@
       .section-subtitle { margin-top: 2px; }
       .chart-section { padding: 9px; }
       .chart-mode-toggle { margin-top: 0; }
-      .options-card summary { padding: 9px; }
-      .options-body { padding: 8px 9px 9px; }
-      .options-table table { min-width: 0; font-size: 12px; }
-      .options-table th,
-      .options-table td { padding: 7px 4px; }
       .status-chip { font-size: 11px; min-height: 22px; padding: 0 7px; }
       .price-chart { min-height: 170px; }
       .chart-axis, .chart-date { font-size: 11px; }
@@ -723,9 +647,6 @@
       .desc-close {
         display: none;
       }
-      .options-card {
-        display: none;
-      }
     }
   </style>
 </head>
@@ -734,7 +655,7 @@
     <header class="app-header">
       <div class="brand">
         <a class="brand-title" href="/">Market Sweep</a>
-        <div id="meta" class="brand-subtitle">Endpoint: /api/fund/WMT</div>
+        <div id="meta" class="brand-subtitle">SEC-backed stock research</div>
       </div>
       <form id="fund-form" class="search">
         <div class="search-field">
@@ -746,8 +667,12 @@
 
     <div id="field-error" class="field-error" role="status" aria-live="polite"></div>
     <section id="output" class="panel loading">Loading WMT...</section>
+    <footer class="site-footer">
+      <span>Market Sweep is informational only, not investment advice.</span>
+      <a href="/legal/">Privacy, terms, and data notes</a>
+    </footer>
   </main>
 
-  <script src="/fund/fund.js?v=20260626-0735" defer></script>
+  <script src="/fund/fund.js?v=20260710-1155" defer></script>
 </body>
 </html>
