@@ -395,15 +395,19 @@
         <div class="options-empty">No notable latest-session flow.</div>
         <div class="options-note">${escapeHtml(data.note || 'Delayed/experimental options flow; not a buy/sell signal.')}</div>`;
     }
-    const rows = contracts.map((row) => `
+    const rows = contracts.map((row) => {
+      const dte = Number.isFinite(Number(row.dte)) ? `${Math.round(Number(row.dte))}DTE` : '';
+      const expiration = [row.expiration || '--', dte ? `(${dte})` : ''].filter(Boolean).join(' ');
+      return `
       <tr>
         <td><span class="option-type ${optionFlowTone(row)}" title="${escapeHtml(row.direction || '')} ${escapeHtml(row.type || '')}">${escapeHtml(row.type || '--')}</span></td>
-        <td>${escapeHtml(row.expiration || '--')}</td>
+        <td>${escapeHtml(expiration)}</td>
         <td>${fmtMoney(row.strike)}</td>
         <td>${fmtMoney(row.last)}</td>
         <td>${fmtInt(row.volume)}</td>
         <td>${fmtInt(row.openInterest)}</td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
     return `
       <div class="options-status">
         <span class="status-chip">${escapeHtml(data.tone || 'options flow')}</span>
