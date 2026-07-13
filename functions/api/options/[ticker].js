@@ -5,6 +5,9 @@ const TTL = {
   blocked: 15 * 60,
 };
 
+const MIN_DTE = 5;
+const MAX_ROWS = 7;
+
 function json(data, init = {}) {
   return new Response(JSON.stringify(data, null, 2), {
     ...init,
@@ -103,6 +106,16 @@ function isoDateFromSeconds(value) {
   return seconds == null ? '' : new Date(seconds * 1000).toISOString().slice(0, 10);
 }
 
+function daysToExpiry(expiration) {
+  const day = String(expiration || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+  const expiryMs = Date.parse(`${day}T00:00:00Z`);
+  if (!Number.isFinite(expiryMs)) return null;
+  const today = new Date().toISOString().slice(0, 10);
+  const todayMs = Date.parse(`${today}T00:00:00Z`);
+  return Math.floor((expiryMs - todayMs) / (24 * 60 * 60 * 1000));
+}
+
 function latestSessionDate(rows) {
   let latest = '';
   for (const row of rows) {
@@ -161,10 +174,13 @@ function normalizeRows(chains) {
     .filter((row) => {
       const tradeDate = isoDateFromSeconds(row.lastTradeDate);
       const volOi = row.volume / row.openInterest;
+      const dte = daysToExpiry(row.expiration);
       return tradeDate === sessionDate
         && row.volume > 100
         && row.lastPrice > 1
         && row.lastPrice < 80
+        && dte != null
+        && dte >= MIN_DTE
         && volOi > 1;
     })
     .map((row) => {
@@ -175,6 +191,7 @@ function normalizeRows(chains) {
         contractSymbol: row.contractSymbol || '',
         strike: cleanNumber(row.strike),
         expiration: row.expiration,
+        dte: daysToExpiry(row.expiration),
         last: row.lastPrice,
         bid: cleanNumber(row.bid),
         ask: cleanNumber(row.ask),
@@ -188,7 +205,7 @@ function normalizeRows(chains) {
       };
     })
     .sort((a, b) => b.score - a.score)
-    .slice(0, 3);
+    .slice(0, MAX_ROWS);
 
   return { rows: filtered, sessionDate };
 }
@@ -238,7 +255,7 @@ export async function onRequestGet(context) {
   const ticker = safeTicker(params.ticker);
   if (!ticker) return json({ success: false, error: 'ticker required' }, { status: 400 });
 
-  const cacheKey = `options:activity:${ticker}:v2`;
+  const cacheKey = `options:activity:${ticker}:v3`;
   const cached = await kvGet(env, cacheKey);
   if (cached) {
     try {
