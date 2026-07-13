@@ -5,6 +5,8 @@
   const output = document.getElementById('output');
   const meta = document.getElementById('meta');
   const fieldError = document.getElementById('field-error');
+  const recentTickers = document.getElementById('recent-tickers');
+  const RECENT_TICKERS_KEY = 'fundRecentTickers';
   let activeRequest = null;
   let loadedTicker = '';
   let chartMode = savedChartMode();
@@ -27,6 +29,40 @@
 
   function cleanTicker(value) {
     return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9.-]/g, '').slice(0, 16);
+  }
+
+  function readRecentTickers() {
+    try {
+      const values = JSON.parse(localStorage.getItem(RECENT_TICKERS_KEY) || '[]');
+      return Array.isArray(values) ? values.map(cleanTicker).filter(Boolean).slice(0, 5) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function writeRecentTickers(values) {
+    try {
+      localStorage.setItem(RECENT_TICKERS_KEY, JSON.stringify(values.slice(0, 5)));
+    } catch {
+      // Recent tickers are a convenience only.
+    }
+  }
+
+  function renderRecentTickers() {
+    if (!recentTickers) return;
+    const values = readRecentTickers();
+    recentTickers.hidden = values.length === 0;
+    recentTickers.innerHTML = values.map((ticker) => (
+      `<button class="recent-ticker" type="button" data-ticker="${escapeHtml(ticker)}">${escapeHtml(ticker)}</button>`
+    )).join('');
+  }
+
+  function rememberTicker(ticker) {
+    const symbol = cleanTicker(ticker);
+    if (!symbol) return;
+    const values = readRecentTickers().filter((item) => item !== symbol);
+    writeRecentTickers([symbol, ...values]);
+    renderRecentTickers();
   }
 
   function escapeHtml(value) {
@@ -656,6 +692,7 @@
       if (controller !== activeRequest) return;
       renderFund(body);
       loadedTicker = symbol;
+      rememberTicker(symbol);
       meta.textContent = `Updated ${new Date().toLocaleString()}`;
       if (updateUrl === 'push') {
         history.pushState({ ticker: symbol }, '', urlForTicker(symbol));
@@ -685,6 +722,19 @@
     const cleaned = cleanTicker(input.value);
     if (input.value !== cleaned) input.value = cleaned;
     if (cleaned) setFieldError('');
+  });
+
+  recentTickers?.addEventListener('click', (event) => {
+    const chip = event.target.closest('.recent-ticker');
+    const symbol = cleanTicker(chip?.dataset.ticker);
+    if (!symbol) return;
+    load(symbol, { updateUrl: symbol === loadedTicker ? 'replace' : 'push' }).catch((err) => {
+      if (err.name === 'AbortError') return;
+      output.className = 'panel error';
+      output.textContent = err.message || 'Request failed';
+      meta.textContent = 'Unavailable';
+      setBusy(false);
+    });
   });
 
   output.addEventListener('click', (event) => {
@@ -729,6 +779,7 @@
     });
   });
 
+  renderRecentTickers();
   load(initialTicker(), { updateUrl: 'replace' }).catch((err) => {
     if (err.name === 'AbortError') return;
     output.className = 'panel error';

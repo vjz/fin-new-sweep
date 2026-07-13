@@ -58,6 +58,11 @@
       gap: 6px;
       min-width: 0;
     }
+    .search-tools {
+      display: grid;
+      gap: 7px;
+      min-width: 0;
+    }
     .search-field {
       position: relative;
       flex: 1;
@@ -117,6 +122,32 @@
       min-width: 76px;
     }
     button:disabled { cursor: wait; opacity: 0.72; }
+    .recent-tickers {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 5px;
+      min-height: 24px;
+    }
+    .recent-tickers[hidden] {
+      display: none;
+    }
+    .recent-ticker {
+      min-width: 0;
+      min-height: 24px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      border-color: var(--line);
+      background: rgba(255,255,255,0.72);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .recent-ticker:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
     .meta { opacity: 0.72; font-size: 13px; margin-bottom: 14px; }
     .panel {
       background: var(--panel);
@@ -643,9 +674,12 @@
         gap: 10px;
       }
       h1 { font-size: 23px; }
-      .search {
+      .search-tools {
         grid-column: 1 / -1;
         grid-row: 2;
+      }
+      .recent-tickers {
+        justify-content: flex-start;
       }
       .panel { padding: 11px; }
       .topline {
@@ -718,7 +752,7 @@
         grid-template-columns: 1fr;
       }
       header a,
-      .search,
+      .search-tools,
       .field-error,
       .meta {
         display: none;
@@ -745,12 +779,15 @@
         <a class="brand-title" href="/">Market Sweep</a>
         <div id="meta" class="brand-subtitle">SEC-backed stock research</div>
       </div>
-      <form id="fund-form" class="search">
-        <div class="search-field">
-          <input id="ticker" name="ticker" autocomplete="off" autocapitalize="characters" spellcheck="false" value="WMT" aria-label="Ticker" placeholder="Ticker" />
-        </div>
-        <button id="load-button" type="submit">Load</button>
-      </form>
+      <div class="search-tools">
+        <form id="fund-form" class="search">
+          <div class="search-field">
+            <input id="ticker" name="ticker" autocomplete="off" autocapitalize="characters" spellcheck="false" value="WMT" aria-label="Ticker" placeholder="Ticker" />
+          </div>
+          <button id="load-button" type="submit">Load</button>
+        </form>
+        <div id="recent-tickers" class="recent-tickers" aria-label="Recently viewed tickers" hidden></div>
+      </div>
     </header>
 
     <div id="field-error" class="field-error" role="status" aria-live="polite"></div>
@@ -761,6 +798,6 @@
     </footer>
   </main>
 
-  <script src="/fund/fund.js?v=20260713-1256" defer></script>
+  <script src="/fund/fund.js?v=20260713-1302" defer></script>
 </body>
 </html>
