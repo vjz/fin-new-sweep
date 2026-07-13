@@ -432,7 +432,7 @@
         <div class="options-note">${escapeHtml(data.note || 'Delayed/experimental options flow; not a buy/sell signal.')}</div>`;
     }
     const rows = contracts.map((row) => {
-      const dte = Number.isFinite(Number(row.dte)) ? `${Math.round(Number(row.dte))}DTE` : '';
+      const dte = Number.isFinite(Number(row.dte)) ? String(Math.round(Number(row.dte))) : '';
       const expiration = [row.expiration || '--', dte ? `(${dte})` : ''].filter(Boolean).join(' ');
       return `
       <tr>
