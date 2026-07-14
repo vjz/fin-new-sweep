@@ -246,7 +246,7 @@ async function buildOptionsActivity(ticker, env) {
     source: 'Options chain data',
     cacheTtlSeconds: TTL.options,
     asOf: new Date().toISOString(),
-    note: 'Delayed/experimental options flow; unusual activity is context, not a buy/sell signal.',
+    note: 'Colors estimate flow from delayed bid/ask; use as context, not confirmation.',
   };
 }
 

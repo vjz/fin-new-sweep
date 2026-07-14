@@ -429,7 +429,7 @@
     if (!contracts.length) {
       return `
         <div class="options-empty">No notable latest-session flow.</div>
-        <div class="options-note">${escapeHtml(data.note || 'Delayed/experimental options flow; not a buy/sell signal.')}</div>`;
+        <div class="options-note">${escapeHtml(data.note || 'Colors estimate flow from delayed bid/ask; use as context, not confirmation.')}</div>`;
     }
     const rows = contracts.map((row) => {
       const dte = Number.isFinite(Number(row.dte)) ? String(Math.round(Number(row.dte))) : '';
@@ -457,7 +457,7 @@
           <tbody>${rows}</tbody>
         </table>
       </div>
-      <div class="options-note">${escapeHtml(data.note || 'Delayed/experimental options flow; not a buy/sell signal.')}</div>`;
+      <div class="options-note">${escapeHtml(data.note || 'Colors estimate flow from delayed bid/ask; use as context, not confirmation.')}</div>`;
   }
 
   async function fetchOptionsActivity(ticker) {
