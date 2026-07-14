@@ -584,9 +584,12 @@
     }
     .options-table {
       background: #fff;
+      max-width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
     }
     .options-table table {
-      min-width: 520px;
+      min-width: 540px;
       font-size: 13px;
     }
     .options-table th,
@@ -731,13 +734,27 @@
       .chart-mode-toggle { margin-top: 0; }
       .options-card summary { padding: 9px; }
       .options-body { padding: 8px 9px 9px; }
-      .options-table table { min-width: 0; font-size: 12px; }
+      .options-table {
+        overflow-x: auto;
+      }
+      .options-table table {
+        min-width: 540px;
+        table-layout: fixed;
+        font-size: 12px;
+      }
       .options-table th,
       .options-table td { padding: 7px 4px; }
+      .options-table th:nth-child(1), .options-table td:nth-child(1) { width: 17%; }
+      .options-table th:nth-child(2), .options-table td:nth-child(2) { width: 27%; }
+      .options-table th:nth-child(3), .options-table td:nth-child(3) { width: 17%; }
+      .options-table th:nth-child(4), .options-table td:nth-child(4) { width: 14%; }
+      .options-table th:nth-child(5), .options-table td:nth-child(5) { width: 14%; }
+      .options-table th:nth-child(6), .options-table td:nth-child(6) { width: 11%; }
       .status-chip { font-size: 11px; min-height: 22px; padding: 0 7px; }
       .price-chart { min-height: 170px; }
       .chart-axis, .chart-date { font-size: 11px; }
       .table-wrap { overflow-x: visible; }
+      .table-wrap.options-table { overflow-x: auto; }
       table { min-width: 0; font-size: 13px; }
       th, td { padding: 8px 5px; }
       th { font-size: 10px; letter-spacing: 0.03em; }
@@ -798,6 +815,6 @@
     </footer>
   </main>
 
-  <script src="/fund/fund.js?v=20260713-1448" defer></script>
+  <script src="/fund/fund.js?v=20260714-1018" defer></script>
 </body>
 </html>
