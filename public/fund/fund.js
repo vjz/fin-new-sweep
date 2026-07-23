@@ -561,6 +561,9 @@
     const quarterlyMeta = latestQuarter
       ? ` · Latest ${escapeHtml(latestQuarter.period || 'quarter')} ended ${escapeHtml(fmtShortDate(latestQuarter.end))} · reported ${escapeHtml(fmtShortDate(latestQuarter.filed))}`
       : '';
+    const newerEarningsMeta = data.earningsRelease?.filingDate
+      ? ` · Newer earnings ${escapeHtml(data.earningsRelease.form || 'filing')} ${escapeHtml(fmtShortDate(data.earningsRelease.filingDate))} pending SEC table update`
+      : '';
     const qualitySection = `
       <div class="section">
         <div class="section-head">
@@ -580,7 +583,7 @@
       <div class="section">
         <div class="section-head">
           <div class="section-title">Quarterly EPS / Sales</div>
-          <div class="section-subtitle">SEC ${escapeHtml(secForms)} facts, YoY change${quarterlyMeta}</div>
+          <div class="section-subtitle">SEC ${escapeHtml(secForms)} facts, YoY change${quarterlyMeta}${newerEarningsMeta}</div>
         </div>
         <div class="table-wrap">
           <table>

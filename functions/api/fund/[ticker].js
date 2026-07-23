@@ -6,8 +6,8 @@ const TTL = {
   rendered: 5 * 60,
   chart: 5 * 60,
   cikMap: 30 * 24 * 60 * 60,
-  companyfacts: 14 * 24 * 60 * 60,
-  submissions: 14 * 24 * 60 * 60,
+  companyfacts: 6 * 60 * 60,
+  submissions: 60 * 60,
   businessDescription: 30 * 24 * 60 * 60,
   blocked: 15 * 60,
 };
@@ -425,7 +425,7 @@ function latestProviderMarketCap(data) {
 }
 
 async function fetchCompanyfacts(cik, env) {
-  return cachedJson(env, `sec:companyfacts:${cik}:v1`, TTL.companyfacts, async () => {
+  return cachedJson(env, `sec:companyfacts:${cik}:v2`, TTL.companyfacts, async () => {
     const padded = String(cik).padStart(10, '0');
     const url = `https://data.sec.gov/api/xbrl/companyfacts/CIK${padded}.json`;
     return fetchJson(url, {
@@ -436,7 +436,7 @@ async function fetchCompanyfacts(cik, env) {
 }
 
 async function fetchSubmissions(cik, env) {
-  return cachedJson(env, `sec:submissions:${cik}:v1`, TTL.submissions, async () => {
+  return cachedJson(env, `sec:submissions:${cik}:v2`, TTL.submissions, async () => {
     const padded = String(cik).padStart(10, '0');
     const url = `https://data.sec.gov/submissions/CIK${padded}.json`;
     return fetchJson(url, {
@@ -444,6 +444,47 @@ async function fetchSubmissions(cik, env) {
       cf: { cacheTtl: TTL.submissions, cacheEverything: true },
     });
   });
+}
+
+function latestEarningsReleaseFiling(submission, afterDate = '') {
+  const recent = submission?.filings?.recent || {};
+  const forms = recent.form || [];
+  const filingDates = recent.filingDate || [];
+  const reportDates = recent.reportDate || [];
+  const docs = recent.primaryDocument || [];
+  const descriptions = recent.primaryDocDescription || [];
+  const accessions = recent.accessionNumber || [];
+  const items = recent.items || [];
+
+  let latest = null;
+  for (let i = 0; i < forms.length; i += 1) {
+    const form = String(forms[i] || '');
+    if (!['8-K', '6-K'].includes(form)) continue;
+
+    const filingDate = String(filingDates[i] || '');
+    if (!filingDate || (afterDate && filingDate <= afterDate)) continue;
+
+    const haystack = [
+      docs[i],
+      descriptions[i],
+      accessions[i],
+      items[i],
+    ].map((value) => String(value || '').toLowerCase()).join(' ');
+    const looksLikeEarnings = /\b2\.02\b|\bearnings?\b|\bresults?\b|\bquarterly\b/.test(haystack);
+    if (!looksLikeEarnings) continue;
+
+    const candidate = {
+      form,
+      filingDate,
+      reportDate: String(reportDates[i] || ''),
+      primaryDocument: String(docs[i] || ''),
+      description: String(descriptions[i] || ''),
+      accessionNumber: String(accessions[i] || ''),
+      items: String(items[i] || ''),
+    };
+    if (!latest || filingDate > latest.filingDate) latest = candidate;
+  }
+  return latest;
 }
 
 async function fetchBusinessDescription(cik, submission, env) {
@@ -1295,6 +1336,11 @@ async function buildFundamentals(ticker, request, env, startYear) {
   const rows = buildRows(facts, startYear);
   const quarterlyRows = buildQuarterlyRows(facts, submission.fiscalYearEnd);
   const quality = buildQuality(facts, marketCap, price);
+  const latestQuarterFiling = [...(quarterlyRows || [])].reverse().find((row) => row.filed);
+  const earningsRelease = latestEarningsReleaseFiling(submission, latestQuarterFiling?.filed || '');
+  if (earningsRelease?.filingDate) {
+    warnings.push(`Newer earnings ${earningsRelease.form} filed ${earningsRelease.filingDate}; SEC quarterly facts may lag until the 10-Q/XBRL update.`);
+  }
 
   return {
     ticker,
@@ -1314,6 +1360,7 @@ async function buildFundamentals(ticker, request, env, startYear) {
     tradingStats: buildTradingStats(meta, chart, price),
     rows,
     quarterlyRows,
+    earningsRelease,
     quality,
     durabilityValuation: buildDurabilityValuation(ticker, quality, quarterlyRows, rows, marketCap),
     relativeStrength: buildRelativeStrength(chart, benchmarkChart),
@@ -1347,7 +1394,7 @@ export async function onRequestGet(context) {
 
   if (!ticker) return json({ error: 'ticker required' }, { status: 400 });
 
-  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v23`;
+  const renderKey = `fund:rendered:${ticker}:${minYear}:${format}:v24`;
   const cached = await kvGet(env, renderKey);
   if (cached) {
     return format === 'json' ? json(JSON.parse(cached)) : text(cached);
